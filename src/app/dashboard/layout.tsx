@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { MessageSquare, Users, Settings, LogOut, Bot } from 'lucide-react';
+import { MessageSquare, Users, Settings, LogOut, Bot, ShoppingBag } from 'lucide-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -31,8 +31,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Bot className="text-blue-400" /> CRM Запчасти
         </div>
         <nav className="flex-1 p-4 space-y-2">
-          <a href="/dashboard" className="flex items-center gap-3 p-3 rounded-lg bg-slate-800 text-white">
+          <a href="/dashboard" className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-800 transition-colors">
             <MessageSquare size={20} /> Чаты
+          </a>
+          <a href="/dashboard/orders" className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-800 transition-colors">
+            <ShoppingBag size={20} /> Заказы
           </a>
           <a href="/dashboard/commands" className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-800 transition-colors">
             <Settings size={20} /> Команды AI

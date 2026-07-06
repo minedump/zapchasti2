@@ -2,9 +2,13 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useSearchParams } from 'next/navigation';
 import { Search, User, Send, Bot } from 'lucide-react';
 
 export default function DashboardPage() {
+  const searchParams = useSearchParams();
+  const chatIdFromUrl = searchParams.get('chatId');
+
   const [chats, setChats] = useState<any[]>([]);
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -26,12 +30,20 @@ export default function DashboardPage() {
         schema: 'public', 
         table: 'chats' 
       }, () => {
-        fetchChats(); // Перезагружаем список при любых изменениях в чатах
+        fetchChats();
       })
       .subscribe();
 
     return () => { supabase.removeChannel(chatChannel); };
   }, []);
+
+  // Авто-выбор чата из URL
+  useEffect(() => {
+    if (chatIdFromUrl && chats.length > 0) {
+      const chat = chats.find(c => c.id === chatIdFromUrl);
+      if (chat) setSelectedChat(chat);
+    }
+  }, [chatIdFromUrl, chats]);
 
   useEffect(() => {
     if (selectedChat) {
