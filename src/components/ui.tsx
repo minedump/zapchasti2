@@ -1,8 +1,11 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-export const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'ghost' }>((
-  { className, variant = 'primary', ...props }, ref
+export const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { 
+  variant?: 'primary' | 'secondary' | 'danger' | 'ghost', 
+  size?: 'sm' | 'md' | 'lg'
+}>((
+  { className, variant = 'primary', size = 'md', ...props }, ref
 ) => {
   const variants = {
     primary: 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm',
@@ -11,12 +14,19 @@ export const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttrib
     ghost: 'hover:bg-slate-100 text-slate-600'
   };
 
+  const sizes = {
+    sm: 'px-2 py-1 text-xs',
+    md: 'px-4 py-2 text-sm',
+    lg: 'px-6 py-3 text-base'
+  };
+
   return (
     <button
       ref={ref}
       className={cn(
-        "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none",
+        "inline-flex items-center justify-center rounded-lg font-medium transition-colors disabled:opacity-50 disabled:pointer-events-none",
         variants[variant],
+        sizes[size],
         className
       )}
       {...props}

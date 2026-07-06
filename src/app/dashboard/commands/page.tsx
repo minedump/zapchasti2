@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Plus, Save, Trash2, Edit3, X, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Button, Input, Skeleton } from '@/components/ui';
 import { toast, Toaster } from 'react-hot-toast';
+import { cn } from '@/lib/utils';
 
 export default function CommandsPage() {
   const [commands, setCommands] = useState<any[]>([]);
@@ -177,6 +178,3 @@ export default function CommandsPage() {
   );
 }
 
-function cn(...inputs: any[]) {
-  return inputs.filter(Boolean).join(' ');
-}
