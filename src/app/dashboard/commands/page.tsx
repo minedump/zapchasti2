@@ -2,135 +2,181 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { Plus, Save, Trash2, Edit3, X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Button, Input, Skeleton } from '@/components/ui';
+import { toast, Toaster } from 'react-hot-toast';
 
 export default function CommandsPage() {
   const [commands, setCommands] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<any>(null);
 
   useEffect(() => {
     fetchCommands();
   }, []);
 
   const fetchCommands = async () => {
-    try {
-      const { data, error } = await supabase.from('bot_commands').select('*');
-      if (error) throw error;
-      if (data) setCommands(data);
-    } catch (err: any) {
-      setError(err.message);
-      console.error('Error fetching commands:', err);
-    } finally {
-      setLoading(false);
+    setLoading(true);
+    const { data } = await supabase.from('bot_commands').select('*').order('created_at', { ascending: false });
+    if (data) setCommands(data);
+    setLoading(false);
+  };
+
+  const handleAdd = () => {
+    const newId = 'new-' + Date.now();
+    const newCmd = { id: newId, command: '', description: '', prompt_template: '', is_active: true, isNew: true };
+    setCommands([newCmd, ...commands]);
+    setEditingId(newId);
+    setEditForm(newCmd);
+  };
+
+  const handleEdit = (cmd: any) => {
+    setEditingId(cmd.id);
+    setEditForm({ ...cmd });
+  };
+
+  const handleSave = async () => {
+    if (!editForm.command.startsWith('/')) {
+      toast.error('Команда должна начинаться с /');
+      return;
     }
-  };
 
-  const addCommand = async () => {
-    const newCommand = {
-      command: '/new_command',
-      prompt_template: 'Введите инструкции для AI здесь...',
-      description: 'Описание команды'
-    };
-    const { data, error } = await supabase.from('bot_commands').insert([newCommand]).select();
-    if (data) setCommands([...commands, data[0]]);
-  };
+    // Валидация на дубликаты
+    const isDuplicate = commands.some(c => c.command === editForm.command && c.id !== editForm.id);
+    if (isDuplicate) {
+      toast.error('Такая команда уже существует');
+      return;
+    }
 
-  const updateCommand = async (id: string, updates: any) => {
-    setCommands(commands.map(c => c.id === id ? { ...c, ...updates } : c));
-  };
-
-  const saveCommand = async (cmd: any) => {
-    const { error } = await supabase.from('bot_commands').update({
-      command: cmd.command,
-      description: cmd.description,
-      prompt_template: cmd.prompt_template
-    }).eq('id', cmd.id);
+    const { isNew, ...payload } = editForm;
     
-    if (!error) {
-      alert('Команда сохранена!');
+    let result;
+    if (isNew) {
+      const { id, ...insertData } = payload;
+      result = await supabase.from('bot_commands').insert([insertData]).select();
+    } else {
+      result = await supabase.from('bot_commands').update(payload).eq('id', editForm.id).select();
+    }
+
+    if (!result.error) {
+      toast.success('Сохранено');
+      setEditingId(null);
       fetchCommands();
+    } else {
+      toast.error('Ошибка сохранения');
     }
   };
 
-  const deleteCommand = async (id: string) => {
-    await supabase.from('bot_commands').delete().eq('id', id);
-    setCommands(commands.filter(c => c.id !== id));
+  const handleDelete = async (id: string) => {
+    if (id.toString().startsWith('new-')) {
+      setCommands(commands.filter(c => c.id !== id));
+      setEditingId(null);
+      return;
+    }
+
+    if (confirm('Удалить эту команду?')) {
+      const { error } = await supabase.from('bot_commands').delete().eq('id', id);
+      if (!error) {
+        toast.success('Удалено');
+        fetchCommands();
+      }
+    }
   };
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="p-8 max-w-5xl mx-auto">
+      <Toaster position="top-right" />
+      
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold text-slate-800">Конструктор команд AI</h1>
-        <button 
-          onClick={addCommand}
-          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus size={20} /> Добавить команду
-        </button>
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Команды AI</h1>
+          <p className="text-slate-500 mt-1">Управление сценариями работы ассистента</p>
+        </div>
+        <Button onClick={handleAdd} className="gap-2">
+          <Plus size={18} /> Создать команду
+        </Button>
       </div>
 
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-lg">
-          Ошибка загрузки: {error}
-        </div>
-      )}
-
-      <div className="space-y-6">
-        {commands.map((cmd) => (
-          <div key={cmd.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <div className="flex gap-4 mb-4">
-              <div className="flex-1">
-                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Команда</label>
-                <input 
-                  type="text" 
-                  value={cmd.command}
-                  onChange={(e) => updateCommand(cmd.id, { command: e.target.value })}
-                  className="w-full p-2 border rounded-lg font-mono text-blue-600"
-                />
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Описание</label>
-                <input 
-                  type="text" 
-                  value={cmd.description}
-                  onChange={(e) => updateCommand(cmd.id, { description: e.target.value })}
-                  className="w-full p-2 border rounded-lg"
-                />
-              </div>
-              <button 
-                onClick={() => saveCommand(cmd)}
-                className="self-end p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                title="Сохранить изменения"
-              >
-                <Save size={20} />
-              </button>
-              <button 
-                onClick={() => deleteCommand(cmd.id)}
-                className="self-end p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                <Trash2 size={20} />
-              </button>
+      <div className="grid gap-6">
+        {loading ? (
+          [1, 2, 3].map(i => <Skeleton key={i} className="h-40 w-full" />)
+        ) : (
+          commands.map((cmd) => (
+            <div 
+              key={cmd.id} 
+              className={cn(
+                "group bg-white rounded-2xl border transition-all duration-200",
+                editingId === cmd.id ? "border-blue-500 ring-4 ring-blue-50 ring-offset-0" : "border-slate-200 hover:border-slate-300 hover:shadow-md"
+              )}
+            >
+              {editingId === cmd.id ? (
+                <div className="p-6 space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-1">Команда</label>
+                      <Input 
+                        value={editForm.command} 
+                        onChange={e => setEditForm({...editForm, command: e.target.value})}
+                        placeholder="/start"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-1">Описание</label>
+                      <Input 
+                        value={editForm.description} 
+                        onChange={e => setEditForm({...editForm, description: e.target.value})}
+                        placeholder="Сбор данных о запчастях"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Промпт (Инструкции для AI)</label>
+                    <textarea 
+                      className="w-full min-h-[200px] p-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm leading-relaxed transition-all"
+                      value={editForm.prompt_template}
+                      onChange={e => setEditForm({...editForm, prompt_template: e.target.value})}
+                      placeholder="Напишите инструкции..."
+                    />
+                  </div>
+                  <div className="flex justify-end gap-3 pt-2">
+                    <Button variant="secondary" onClick={() => { setEditingId(null); if(cmd.isNew) fetchCommands(); }}>Отмена</Button>
+                    <Button onClick={handleSave} className="gap-2">
+                      <Save size={18} /> Сохранить
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 flex items-start justify-between">
+                  <div className="space-y-3 flex-1">
+                    <div className="flex items-center gap-3">
+                      <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-bold font-mono">
+                        {cmd.command}
+                      </span>
+                      <h3 className="font-semibold text-slate-800">{cmd.description}</h3>
+                    </div>
+                    <div className="text-sm text-slate-500 line-clamp-2 pr-10">
+                      {cmd.prompt_template}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="sm" onClick={() => handleEdit(cmd)} className="p-2">
+                      <Edit3 size={18} />
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => handleDelete(cmd.id)} className="p-2">
+                      <Trash2 size={18} />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
-            
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Промпт для AI</label>
-              <textarea 
-                rows={4}
-                value={cmd.prompt_template}
-                onChange={(e) => updateCommand(cmd.id, { prompt_template: e.target.value })}
-                className="w-full p-3 border rounded-lg text-sm bg-slate-50 focus:bg-white transition-colors"
-              />
-            </div>
-          </div>
-        ))}
-
-        {commands.length === 0 && !loading && (
-          <div className="text-center py-12 text-slate-400 border-2 border-dashed rounded-xl">
-            Команды еще не созданы. Нажмите «Добавить команду», чтобы начать.
-          </div>
+          ))
         )}
       </div>
     </div>
   );
+}
+
+function cn(...inputs: any[]) {
+  return inputs.filter(Boolean).join(' ');
 }
