@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Settings, Plus, Trash2, Palette, Tag, BookOpen, MessageSquare } from 'lucide-react';
+import { Settings, Plus, Trash2, Palette, Tag, BookOpen, MessageSquare, Save } from 'lucide-react';
 import { Button, Input, Skeleton } from '@/components/ui';
 import { toast, Toaster } from 'react-hot-toast';
+import { cn } from '@/lib/utils';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<'general' | 'knowledge' | 'dictionary'>('general');
