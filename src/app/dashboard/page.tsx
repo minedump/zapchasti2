@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
-import { Search, Send, Bot, ShoppingBag, User } from 'lucide-react';
+import { Search, Send, Bot, ShoppingBag, User, MessageSquare } from 'lucide-react';
 
 // Telegram plane SVG (lucide doesn't have it)
 const TelegramIcon = ({ size = 12 }: { size?: number }) => (
@@ -31,7 +31,7 @@ export default function DashboardPage() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const PAGE_SIZE = 30;
+  const PAGE_SIZE = 15;
   // 'instant' | 'smooth' | null
   const pendingScrollRef = useRef<'instant' | 'smooth' | null>(null);
 
@@ -159,7 +159,6 @@ export default function DashboardPage() {
       const prevScrollHeight = container?.scrollHeight ?? 0;
       setMessages(prev => [...data.reverse(), ...prev]);
       setHasMore(data.length === PAGE_SIZE);
-      // restore scroll position so user doesn't jump
       requestAnimationFrame(() => {
         if (container) container.scrollTop = container.scrollHeight - prevScrollHeight;
       });
@@ -168,6 +167,15 @@ export default function DashboardPage() {
     }
     setLoadingMore(false);
   }, [selectedChat, loadingMore, hasMore, messages]);
+
+  // Infinite scroll — load more when scrolled to top
+  const handleMessagesScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    if (container.scrollTop < 60 && hasMore && !loadingMore) {
+      loadMoreMessages();
+    }
+  }, [hasMore, loadingMore, loadMoreMessages]);
 
   const fetchOrders = async (chatId: string) => {
     const { data } = await supabase
@@ -245,7 +253,7 @@ export default function DashboardPage() {
                 key={chat.id}
                 onClick={() => handleChatSelect(chat)}
                 className={cn(
-                  "w-full p-4 flex items-start gap-3 border-b transition-all",
+                  "w-full p-4 flex items-start gap-3 border-b transition-all cursor-pointer",
                   selectedChat?.id === chat.id ? "bg-white shadow-sm z-10" : "hover:bg-white/50"
                 )}
               >
@@ -300,16 +308,16 @@ export default function DashboardPage() {
               </Button>
             </div>
 
-            <div ref={messagesContainerRef} className="flex-1 p-4 overflow-y-auto space-y-4">
-              {hasMore && (
+            <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="flex-1 p-4 overflow-y-auto space-y-4">
+              {loadingMore && (
                 <div className="flex justify-center pb-2">
-                  <button
-                    onClick={loadMoreMessages}
-                    disabled={loadingMore}
-                    className="text-xs text-slate-400 hover:text-slate-600 transition-colors px-3 py-1 rounded-full hover:bg-slate-100 disabled:opacity-50"
-                  >
-                    {loadingMore ? 'Загрузка...' : 'Загрузить ранее'}
-                  </button>
+                  <div className="flex items-center gap-2 text-xs text-slate-400 px-3 py-1.5 bg-white rounded-full shadow-sm border border-slate-100">
+                    <svg className="animate-spin w-3 h-3 text-blue-500" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                    Загрузка сообщений...
+                  </div>
                 </div>
               )}
               {messages.map((msg) => {
@@ -355,8 +363,14 @@ export default function DashboardPage() {
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-slate-400">
-            Выберите чат для начала общения
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-400 select-none">
+            <div className="w-20 h-20 rounded-3xl bg-slate-100 flex items-center justify-center">
+              <MessageSquare size={36} className="text-slate-300" />
+            </div>
+            <div className="text-center">
+              <p className="font-semibold text-slate-500">Выберите чат</p>
+              <p className="text-sm text-slate-400 mt-1">Нажмите на диалог слева, чтобы начать общение</p>
+            </div>
           </div>
         )}
       </div>
