@@ -61,19 +61,29 @@ export async function POST(req: Request) {
     .from('chats')
     .select('*')
     .eq('telegram_chat_id', telegramChatId)
-    .single();
+    .maybeSingle();
 
   if (!chatData) {
     const { data: newChat, error: createError } = await supabase
       .from('chats')
       .insert([{ 
         telegram_chat_id: telegramChatId, 
-        customer_name: from.first_name + (from.last_name ? ` ${from.last_name}` : ''),
-        status: 'bot_processing'
+        customer_name: from?.first_name + (from?.last_name ? ` ${from.last_name}` : ''),
+        status: 'bot_processing',
+        ai_metadata: { step: 'start', retry_count: 0, collected_data: {} }
       }])
       .select()
-      .single();
+      .maybeSingle();
+    
+    if (createError || !newChat) {
+      console.error('Error creating chat:', createError);
+      return NextResponse.json({ ok: true });
+    }
     chatData = newChat;
+  }
+
+  if (!chatData || !chatData.id) {
+    return NextResponse.json({ ok: true });
   }
 
   // 2. Сохранить входящее сообщение
