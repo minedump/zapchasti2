@@ -7,16 +7,23 @@ import { Plus, Save, Trash2 } from 'lucide-react';
 export default function CommandsPage() {
   const [commands, setCommands] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchCommands();
   }, []);
 
   const fetchCommands = async () => {
-    const { data, error } = await supabase.from('bot_commands').select('*');
-    if (error) console.error('Error fetching commands:', error);
-    if (data) setCommands(data);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.from('bot_commands').select('*');
+      if (error) throw error;
+      if (data) setCommands(data);
+    } catch (err: any) {
+      setError(err.message);
+      console.error('Error fetching commands:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const addCommand = async () => {
@@ -50,6 +57,12 @@ export default function CommandsPage() {
           <Plus size={20} /> Добавить команду
         </button>
       </div>
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 rounded-lg">
+          Ошибка загрузки: {error}
+        </div>
+      )}
 
       <div className="space-y-6">
         {commands.map((cmd) => (
