@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { MessageSquare, Settings, LogOut, Bot, ShoppingBag, Palette } from 'lucide-react';
+import { MessageSquare, Settings, LogOut, Bot, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -38,7 +38,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <NavItem href="/dashboard" icon={<MessageSquare size={20} />} label="Чаты" />
           <NavItem href="/dashboard/orders" icon={<ShoppingBag size={20} />} label="Заказы" />
           <NavItem href="/dashboard/commands" icon={<Bot size={20} />} label="Команды AI" />
-          <NavItem href="/dashboard/settings" icon={<Palette size={20} />} label="Настройки" />
+          <NavItem href="/dashboard/settings" icon={<Settings size={20} />} label="Настройки" />
         </nav>
         <div className="p-4 border-t border-slate-800">
           <Button
@@ -52,11 +52,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden overflow-y-auto">
-        <div className="flex-1">{children}</div>
-        <footer className="shrink-0 border-t border-slate-200 bg-white px-8 py-3 text-center text-xs text-slate-400">
-          &copy; {new Date().getFullYear()} PromptFlow &mdash; CRM для Telegram
-        </footer>
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {children}
       </main>
     </div>
   );

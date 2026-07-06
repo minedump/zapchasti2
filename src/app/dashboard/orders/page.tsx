@@ -31,11 +31,15 @@ export default function OrdersPage() {
   };
 
   return (
-    <div className="p-8 max-w-5xl mx-auto w-full">
+    <div className="flex-1 overflow-y-auto flex flex-col">
+    <div className="p-8 max-w-5xl mx-auto w-full flex-1">
+
+
+
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-            <ShoppingBag className="text-blue-600" /> Все заказы
+            Все заказы
           </h1>
           <p className="text-slate-500 mt-1">История всех запросов от клиентов</p>
         </div>
@@ -104,6 +108,10 @@ export default function OrdersPage() {
           </div>
         )}
       </div>
+    </div>
+    <footer className="shrink-0 border-t border-slate-200 bg-white px-8 py-3 text-center text-xs text-slate-400">
+      &copy; {new Date().getFullYear()} PromptFlow &mdash; CRM для Telegram
+    </footer>
     </div>
   );
 }

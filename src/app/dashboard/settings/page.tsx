@@ -111,18 +111,17 @@ export default function SettingsPage() {
   );
 
   return (
-    <div className="p-8 max-w-3xl mx-auto w-full pb-16">
+    <div className="flex-1 overflow-y-auto flex flex-col">
+    <div className="p-8 max-w-3xl mx-auto w-full pb-4 flex-1">
       <Toaster />
 
-      {/* Header */}
-      <div className="mb-10">
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
-          <div className="p-2 bg-blue-600 rounded-xl">
-            <Settings size={20} className="text-white" />
-          </div>
-          Настройки PromptFlow
-        </h1>
-        <p className="text-slate-400 mt-2 ml-[52px] text-sm">Промпт бота, база знаний и справочники</p>
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+            Настройки
+          </h1>
+          <p className="text-slate-500 mt-1">Промпт бота, база знаний и справочники</p>
+        </div>
       </div>
 
       <div className="space-y-8">
@@ -276,6 +275,10 @@ export default function SettingsPage() {
         </Section>
 
       </div>
+    </div>
+    <footer className="shrink-0 border-t border-slate-200 bg-white px-8 py-3 text-center text-xs text-slate-400">
+      &copy; {new Date().getFullYear()} PromptFlow &mdash; CRM для Telegram
+    </footer>
     </div>
   );
 }
