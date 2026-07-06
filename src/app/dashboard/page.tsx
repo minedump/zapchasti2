@@ -17,27 +17,42 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchChats();
-    const channel = supabase
-      .channel('schema-db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, fetchChats)
+    
+    const chatChannel = supabase
+      .channel('public-chats')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'chats' 
+      }, () => {
+        fetchChats(); // Перезагружаем список при любых изменениях в чатах
+      })
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    return () => { supabase.removeChannel(chatChannel); };
   }, []);
 
   useEffect(() => {
     if (selectedChat) {
       fetchMessages(selectedChat.id);
+      
+      // Подписка на новые сообщения именно для этого чата
       const msgChannel = supabase
-        .channel(`chat-${selectedChat.id}`)
+        .channel(`chat-messages-${selectedChat.id}`)
         .on('postgres_changes', { 
           event: 'INSERT', 
           schema: 'public', 
           table: 'messages', 
           filter: `chat_id=eq.${selectedChat.id}` 
         }, (payload) => {
-          setMessages(prev => [...prev, payload.new]);
+          setMessages(prev => {
+            // Проверка на дубликаты (на случай если сообщение уже добавлено локально)
+            if (prev.find(m => m.id === payload.new.id)) return prev;
+            return [...prev, payload.new];
+          });
         })
         .subscribe();
+
       return () => { supabase.removeChannel(msgChannel); };
     }
   }, [selectedChat]);
