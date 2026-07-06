@@ -128,7 +128,8 @@ export async function POST(req: Request) {
 
   // 4. Если работает бот (продолжение диалога)
   if (chatData.status === 'bot_processing') {
-    const currentPrompt = chatData.ai_metadata.current_prompt || "Ты помощник по запчастям.";
+    const metadata = chatData.ai_metadata || {};
+    const currentPrompt = metadata.current_prompt || "Ты помощник по запчастям.";
     
     const { data: history } = await supabase
       .from('messages')
@@ -139,8 +140,8 @@ export async function POST(req: Request) {
     const aiResponse = await askDeepSeek(
       text, 
       history || [], 
-      chatData.ai_metadata.collected_data, 
-      chatData.ai_metadata.retry_count,
+      metadata.collected_data || {},
+      metadata.retry_count || 0,
       currentPrompt
     );
 

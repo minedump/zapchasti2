@@ -13,7 +13,8 @@ export default function CommandsPage() {
   }, []);
 
   const fetchCommands = async () => {
-    const { data } = await supabase.from('bot_commands').select('*');
+    const { data, error } = await supabase.from('bot_commands').select('*');
+    if (error) console.error('Error fetching commands:', error);
     if (data) setCommands(data);
     setLoading(false);
   };
