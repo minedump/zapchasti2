@@ -50,6 +50,35 @@ export default function SettingsPage() {
     toast.success('Обновлено');
   };
 
+  const addStatus = async () => {
+    const name = prompt('Название статуса:');
+    if (!name) return;
+    const { error } = await supabase.from('order_statuses').insert([{ name, color: '#cbd5e1' }]);
+    if (error) toast.error('Ошибка или такой статус уже есть');
+    else fetchData();
+  };
+
+  const addTag = async () => {
+    const name = prompt('Название метки:');
+    if (!name) return;
+    const { error } = await supabase.from('tags').insert([{ name, color: '#3b82f6' }]);
+    if (error) toast.error('Ошибка или такая метка уже есть');
+    else fetchData();
+  };
+
+  const deleteItem = async (table: string, id: string, isSystem: boolean) => {
+    if (isSystem) return toast.error('Системный элемент нельзя удалить');
+    if (confirm('Удалить?')) {
+      await supabase.from(table).delete().eq('id', id);
+      fetchData();
+    }
+  };
+
+  const updateColor = async (table: string, id: string, color: string) => {
+    await supabase.from(table).update({ color }).eq('id', id);
+    fetchData();
+  };
+
   if (loading) return <div className="p-8"><Skeleton className="h-20 w-full mb-4" /><Skeleton className="h-64 w-full" /></div>;
 
   return (
