@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
 import { Search, Send, Bot, ShoppingBag, User } from 'lucide-react';
@@ -21,9 +21,13 @@ export default function DashboardPage() {
   const [statuses, setStatuses] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_SIZE = 30;
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (smooth = false) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
   };
 
   useEffect(() => {
@@ -83,6 +87,7 @@ export default function DashboardPage() {
           filter: `chat_id=eq.${selectedChat.id}` 
         }, (payload) => {
           setMessages(prev => prev.find(m => m.id === payload.new.id) ? prev : [...prev, payload.new]);
+          setTimeout(() => scrollToBottom(true), 50);
         })
         .subscribe();
 
@@ -106,13 +111,45 @@ export default function DashboardPage() {
   }, [selectedChat]);
 
   const fetchMessages = async (chatId: string) => {
+    const { data, count } = await supabase
+      .from('messages')
+      .select('*', { count: 'exact' })
+      .eq('chat_id', chatId)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE);
+    if (data) {
+      setMessages(data.reverse());
+      setHasMore((count ?? 0) > PAGE_SIZE);
+      // scroll to bottom without animation after initial load
+      setTimeout(() => scrollToBottom(false), 0);
+    }
+  };
+
+  const loadMoreMessages = useCallback(async () => {
+    if (!selectedChat || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const oldest = messages[0];
     const { data } = await supabase
       .from('messages')
       .select('*')
-      .eq('chat_id', chatId)
-      .order('created_at', { ascending: true });
-    if (data) setMessages(data);
-  };
+      .eq('chat_id', selectedChat.id)
+      .lt('created_at', oldest.created_at)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE);
+    if (data && data.length > 0) {
+      const container = messagesContainerRef.current;
+      const prevScrollHeight = container?.scrollHeight ?? 0;
+      setMessages(prev => [...data.reverse(), ...prev]);
+      setHasMore(data.length === PAGE_SIZE);
+      // restore scroll position so user doesn't jump
+      requestAnimationFrame(() => {
+        if (container) container.scrollTop = container.scrollHeight - prevScrollHeight;
+      });
+    } else {
+      setHasMore(false);
+    }
+    setLoadingMore(false);
+  }, [selectedChat, loadingMore, hasMore, messages]);
 
   const fetchOrders = async (chatId: string) => {
     const { data } = await supabase
@@ -162,11 +199,11 @@ export default function DashboardPage() {
       {/* Chat List */}
       <div className="w-80 border-r flex flex-col bg-slate-50/50">
         <div className="h-[65px] px-4 border-b bg-white flex items-center">
-          <div className="relative">
+          <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <Input 
               placeholder="Поиск чатов..." 
-              className="pl-10 bg-slate-50 border-none"
+              className="pl-10 bg-slate-50 border-slate-200 w-full"
             />
           </div>
         </div>
@@ -226,45 +263,56 @@ export default function DashboardPage() {
         {selectedChat ? (
           <>
             <div className="h-[65px] px-4 bg-white border-b flex justify-between items-center shadow-sm">
-              <div>
-                <h2 className="font-bold text-slate-800">{selectedChat.customer_name || 'Чат с клиентом'}</h2>
-                <p className="text-[10px] text-slate-400 font-mono uppercase tracking-wider">Telegram ID: {selectedChat.telegram_chat_id}</p>
-              </div>
-              <div className="flex gap-2">
-                <Button 
-                  variant={selectedChat.status === 'bot_processing' ? 'primary' : 'secondary'}
-                  size="sm"
-                  onClick={async () => {
-                    const newStatus = selectedChat.status === 'bot_processing' ? 'operator_needed' : 'bot_processing';
-                    await supabase.from('chats').update({ status: newStatus }).eq('id', selectedChat.id);
-                    setSelectedChat({...selectedChat, status: newStatus});
-                  }}
-                  className="gap-2"
-                >
-                  <Bot size={16} />
-                  {selectedChat.status === 'bot_processing' ? 'Бот активен' : 'Включить бота'}
-                </Button>
-              </div>
+              <h2 className="font-bold text-slate-800">{selectedChat.customer_name || 'Чат с клиентом'}</h2>
+              <Button 
+                variant={selectedChat.status === 'bot_processing' ? 'primary' : 'secondary'}
+                size="md"
+                onClick={async () => {
+                  const newStatus = selectedChat.status === 'bot_processing' ? 'operator_needed' : 'bot_processing';
+                  await supabase.from('chats').update({ status: newStatus }).eq('id', selectedChat.id);
+                  setSelectedChat({...selectedChat, status: newStatus});
+                }}
+                className="gap-2"
+              >
+                <Bot size={16} />
+                {selectedChat.status === 'bot_processing' ? 'Бот активен' : 'Включить бота'}
+              </Button>
             </div>
 
-            <div className="flex-1 p-4 overflow-y-auto space-y-4">
-              {messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.is_from_bot || msg.sender_id ? 'justify-start' : 'justify-end'}`}>
-                  <div className={`max-w-[70%] p-3 rounded-2xl ${
-                    msg.is_from_bot 
-                      ? 'bg-purple-100 text-purple-900 rounded-tl-none' 
-                      : msg.sender_id 
-                        ? 'bg-blue-600 text-white rounded-tl-none' 
-                        : 'bg-white border border-slate-200 text-slate-800 rounded-tr-none shadow-sm'
-                  }`}>
-                    <p className="text-sm">{msg.content}</p>
-                    <span className="text-[10px] opacity-50 mt-1 block">
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      {msg.is_ai_generated && ' • AI'}
-                    </span>
-                  </div>
+            <div ref={messagesContainerRef} className="flex-1 p-4 overflow-y-auto space-y-4">
+              {hasMore && (
+                <div className="flex justify-center pb-2">
+                  <button
+                    onClick={loadMoreMessages}
+                    disabled={loadingMore}
+                    className="text-xs text-slate-400 hover:text-slate-600 transition-colors px-3 py-1 rounded-full hover:bg-slate-100 disabled:opacity-50"
+                  >
+                    {loadingMore ? 'Загрузка...' : 'Загрузить ранее'}
+                  </button>
                 </div>
-              ))}
+              )}
+              {messages.map((msg) => {
+                // client messages: not from bot AND no sender_id → left
+                // bot/operator messages: from bot OR has sender_id → right
+                const isOutgoing = msg.is_from_bot || msg.sender_id;
+                return (
+                  <div key={msg.id} className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[70%] p-3 rounded-2xl ${
+                      msg.is_from_bot 
+                        ? 'bg-purple-100 text-purple-900 rounded-br-none' 
+                        : msg.sender_id 
+                          ? 'bg-blue-600 text-white rounded-br-none' 
+                          : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-sm'
+                    }`}>
+                      <p className="text-sm">{msg.content}</p>
+                      <span className="text-[10px] opacity-50 mt-1 block text-right">
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {msg.is_ai_generated && ' • AI'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
 
@@ -279,8 +327,8 @@ export default function DashboardPage() {
                   placeholder="Введите сообщение..."
                   className="flex-1"
                 />
-                <Button type="submit" className="p-2 w-10 h-10">
-                  <Send size={20} />
+                <Button type="submit" className="w-10 h-10 flex items-center justify-center p-0 shrink-0">
+                  <Send size={16} />
                 </Button>
               </form>
             </div>
@@ -342,11 +390,14 @@ export default function DashboardPage() {
             ))}
             
             {orders.length === 0 && (
-              <div className="text-center py-20">
-                <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <ShoppingBag size={20} className="text-slate-300" />
+              <div className="flex flex-col items-center justify-center h-full py-16 gap-4">
+                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">
+                  <ShoppingBag size={28} className="text-slate-300" />
                 </div>
-                <p className="text-xs text-slate-400 italic">Заказов пока нет</p>
+                <div className="text-center">
+                  <p className="text-sm font-medium text-slate-400">Заказов пока нет</p>
+                  <p className="text-xs text-slate-300 mt-1">Они появятся после опроса</p>
+                </div>
               </div>
             )}
           </div>
