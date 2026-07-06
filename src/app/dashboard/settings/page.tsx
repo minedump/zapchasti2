@@ -83,7 +83,7 @@ export default function SettingsPage() {
   };
 
   if (loading) return (
-    <div className="p-8 max-w-3xl mx-auto w-full space-y-6">
+    <div className="p-8 max-w-5xl mx-auto w-full space-y-6">
       <div className="flex items-center gap-3 mb-2">
         <Skeleton className="w-8 h-8 rounded-lg" />
         <Skeleton className="h-8 w-56" />
@@ -112,7 +112,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-    <div className="p-8 max-w-3xl mx-auto w-full pb-4 flex-1">
+    <div className="p-8 max-w-5xl mx-auto w-full pb-4 flex-1">
       <Toaster />
 
       <div className="flex justify-between items-center mb-8">
