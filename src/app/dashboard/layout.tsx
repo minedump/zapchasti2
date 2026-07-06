@@ -32,7 +32,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="p-2 bg-blue-600 rounded-lg">
             <Bot size={20} className="text-white" />
           </div>
-          <span>PromptFlow</span>
+          <span className="tracking-widest uppercase text-sm">PromptFlow</span>
         </div>
         <nav className="flex-1 p-4 space-y-2">
           <NavItem href="/dashboard" icon={<MessageSquare size={20} />} label="Чаты" />
@@ -44,7 +44,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Button
             variant="ghost"
             onClick={() => supabase.auth.signOut().then(() => router.push('/login'))}
-            className="flex items-center gap-3 p-3 w-full rounded-xl hover:bg-red-900/30 text-red-400 hover:text-red-400"
+            className="flex items-center gap-3 p-3 w-full rounded-xl hover:bg-red-900/30 text-red-400 hover:text-red-400 justify-start"
           >
             <LogOut size={20} /> Выйти
           </Button>
@@ -52,8 +52,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {children}
+      <main className="flex-1 flex flex-col overflow-hidden overflow-y-auto">
+        <div className="flex-1">{children}</div>
+        <footer className="shrink-0 border-t border-slate-200 bg-white px-8 py-3 text-center text-xs text-slate-400">
+          &copy; {new Date().getFullYear()} PromptFlow &mdash; CRM для Telegram
+        </footer>
       </main>
     </div>
   );

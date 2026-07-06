@@ -111,7 +111,7 @@ export default function SettingsPage() {
   );
 
   return (
-    <div className="p-8 max-w-3xl mx-auto w-full">
+    <div className="p-8 max-w-3xl mx-auto w-full pb-16">
       <Toaster />
 
       {/* Header */}
