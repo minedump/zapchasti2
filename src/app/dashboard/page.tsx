@@ -32,10 +32,19 @@ export default function DashboardPage() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const PAGE_SIZE = 30;
+  // 'instant' | 'smooth' | null
+  const pendingScrollRef = useRef<'instant' | 'smooth' | null>(null);
 
-  const scrollToBottom = (smooth = false) => {
-    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
-  };
+  // Scroll after messages state actually renders
+  useEffect(() => {
+    if (pendingScrollRef.current === 'instant') {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+      pendingScrollRef.current = null;
+    } else if (pendingScrollRef.current === 'smooth') {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      pendingScrollRef.current = null;
+    }
+  }, [messages]);
 
   useEffect(() => {
     fetchChats();
@@ -93,8 +102,11 @@ export default function DashboardPage() {
           table: 'messages', 
           filter: `chat_id=eq.${selectedChat.id}` 
         }, (payload) => {
-          setMessages(prev => prev.find(m => m.id === payload.new.id) ? prev : [...prev, payload.new]);
-          setTimeout(() => scrollToBottom(true), 50);
+          setMessages(prev => {
+            if (prev.find(m => m.id === payload.new.id)) return prev;
+            pendingScrollRef.current = 'smooth';
+            return [...prev, payload.new];
+          });
         })
         .subscribe();
 
@@ -125,10 +137,9 @@ export default function DashboardPage() {
       .order('created_at', { ascending: false })
       .limit(PAGE_SIZE);
     if (data) {
+      pendingScrollRef.current = 'instant';
       setMessages(data.reverse());
       setHasMore((count ?? 0) > PAGE_SIZE);
-      // scroll to bottom without animation after initial load
-      setTimeout(() => scrollToBottom(false), 0);
     }
   };
 
