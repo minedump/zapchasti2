@@ -40,19 +40,20 @@ async function askDeepSeek(text: string, history: any[], currentState: any, retr
 }
 
 export async function POST(req: Request) {
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch (e) {
+    return NextResponse.json({ ok: true });
+  }
   
-  // Проверка на наличие сообщения и текста
-  if (!body.message || !body.message.text) {
+  // Максимально строгая проверка: нам нужно только текстовое сообщение
+  if (!body || !body.message || !body.message.chat || !body.message.chat.id || !body.message.text) {
+    console.log('Ignoring non-text update:', body);
     return NextResponse.json({ ok: true });
   }
 
   const { chat, text, from } = body.message;
-  
-  if (!chat || !chat.id) {
-    return NextResponse.json({ ok: true });
-  }
-
   const telegramChatId = chat.id;
 
   // 1. Найти или создать чат
