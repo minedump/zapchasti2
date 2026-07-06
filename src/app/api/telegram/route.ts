@@ -141,11 +141,29 @@ export async function POST(req: Request) {
   // 4. Если работает бот
   if (chatData.status === 'bot_processing') {
     const metadata = chatData.ai_metadata || {};
-    const currentPrompt = metadata.current_prompt;
+    let currentPrompt = metadata.current_prompt;
     
+    // Если промпта нет (дефолтный режим), берем его из настроек и добавляем знания
     if (!currentPrompt) {
-      await supabaseAdmin.from('chats').update({ status: 'operator_needed' }).eq('id', chatData.id);
-      return NextResponse.json({ ok: true });
+      const { data: settings } = await supabaseAdmin
+        .from('bot_settings')
+        .select('value')
+        .eq('key', 'default_assistant_prompt')
+        .single();
+      
+      const { data: knowledge } = await supabaseAdmin
+        .from('knowledge_base')
+        .select('title, content')
+        .eq('is_active', true);
+
+      const knowledgeContext = knowledge?.map(k => `СТАТЬЯ: ${k.title}\n${k.content}`).join('\n\n') || '';
+      
+      currentPrompt = `
+        ${settings?.value || "Ты помощник."}
+        
+        БАЗА ЗНАНИЙ КОМПАНИИ:
+        ${knowledgeContext}
+      `;
     }
     
     const { data: history } = await supabaseAdmin
