@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
-import { Search, Send, Bot, ShoppingBag, User, MessageSquare } from 'lucide-react';
+import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Tag, X } from 'lucide-react';
 
 // Telegram plane SVG (lucide doesn't have it)
 const TelegramIcon = ({ size = 12 }: { size?: number }) => (
@@ -26,6 +26,8 @@ export default function DashboardPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [statuses, setStatuses] = useState<any[]>([]);
+  const [tags, setTags] = useState<any[]>([]);
+  const [openStatusDropdown, setOpenStatusDropdown] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -49,6 +51,11 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchChats();
     fetchStatuses();
+    fetchTags();
+    // close status dropdown on outside click
+    const handler = () => setOpenStatusDropdown(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
     
     const chatChannel = supabase
       .channel('global-chat-updates')
@@ -61,6 +68,11 @@ export default function DashboardPage() {
   const fetchStatuses = async () => {
     const { data } = await supabase.from('order_statuses').select('*').order('created_at');
     if (data) setStatuses(data);
+  };
+
+  const fetchTags = async () => {
+    const { data } = await supabase.from('tags').select('*').order('created_at');
+    if (data) setTags(data);
   };
 
   const fetchChats = async () => {
@@ -180,10 +192,31 @@ export default function DashboardPage() {
   const fetchOrders = async (chatId: string) => {
     const { data } = await supabase
       .from('orders')
-      .select('*')
+      .select(`
+        *,
+        order_statuses (id, name, color),
+        order_tags (tag_id, tags (id, name, color))
+      `)
       .eq('chat_id', chatId)
       .order('created_at', { ascending: false });
     if (data) setOrders(data);
+  };
+
+  const updateOrderStatus = async (orderId: string, statusId: string) => {
+    const status = statuses.find(s => s.id === statusId);
+    await supabase.from('orders').update({ status_id: statusId }).eq('id', orderId);
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status_id: statusId, order_statuses: status } : o));
+    setOpenStatusDropdown(null);
+    toast.success('Статус обновлён');
+  };
+
+  const toggleOrderTag = async (orderId: string, tagId: string, hasTag: boolean) => {
+    if (hasTag) {
+      await supabase.from('order_tags').delete().eq('order_id', orderId).eq('tag_id', tagId);
+    } else {
+      await supabase.from('order_tags').insert([{ order_id: orderId, tag_id: tagId }]);
+    }
+    fetchOrders(selectedChat.id);
   };
 
   const sendMessage = async () => {
@@ -385,30 +418,50 @@ export default function DashboardPage() {
           </div>
           
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {orders.map((order) => (
+            {orders.map((order) => {
+              const orderTagIds = new Set((order.order_tags || []).map((ot: any) => ot.tag_id));
+              return (
               <div key={order.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
+                {/* Header: номер + статус */}
                 <div className="flex justify-between items-center mb-3">
                   <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-bold font-mono">
                     #{order.order_number}
                   </span>
-                  <select 
-                    value={order.status_id || ''}
-                    onChange={async (e) => {
-                      await supabase.from('orders').update({ status_id: e.target.value }).eq('id', order.id);
-                      fetchOrders(selectedChat.id);
-                      toast.success('Статус обновлен');
-                    }}
-                    className="text-[10px] font-bold uppercase bg-slate-100 border-none rounded-lg px-2 py-1 focus:ring-0 cursor-pointer"
-                    style={order.order_statuses ? { color: order.order_statuses.color, backgroundColor: order.order_statuses.color + '15' } : {}}
-                  >
-                    <option value="">Статус...</option>
-                    {statuses.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
+                  {/* Status dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setOpenStatusDropdown(openStatusDropdown === order.id ? null : order.id); }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase cursor-pointer transition-all hover:opacity-80"
+                      style={order.order_statuses
+                        ? { backgroundColor: order.order_statuses.color + '20', color: order.order_statuses.color }
+                        : { backgroundColor: '#f1f5f9', color: '#94a3b8' }
+                      }
+                    >
+                      {order.order_statuses && (
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: order.order_statuses.color }} />
+                      )}
+                      {order.order_statuses?.name || 'Статус'}
+                      <ChevronDown size={11} />
+                    </button>
+                    {openStatusDropdown === order.id && (
+                      <div className="absolute top-full right-0 mt-1 z-20 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[150px]">
+                        {statuses.map(s => (
+                          <button
+                            key={s.id}
+                            onClick={(e) => { e.stopPropagation(); updateOrderStatus(order.id, s.id); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors"
+                          >
+                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+                            <span style={{ color: s.color }}>{s.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                
-                <div className="space-y-2">
+
+                {/* Data fields */}
+                <div className="space-y-2 mb-3">
                   {Object.entries(order.data || {}).map(([key, value]: [string, any]) => (
                     <div key={key} className="flex flex-col">
                       <span className="text-[9px] text-slate-400 uppercase font-bold">{key}</span>
@@ -416,13 +469,43 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
-                
-                <div className="mt-3 pt-3 border-t border-slate-50 flex justify-between items-center">
+
+                {/* Tags */}
+                {tags.length > 0 && (
+                  <div className="pt-3 border-t border-slate-100">
+                    <div className="flex items-center gap-1 mb-2">
+                      <Tag size={11} className="text-slate-400" />
+                      <span className="text-[9px] text-slate-400 uppercase font-bold">Метки</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {tags.map(tag => {
+                        const active = orderTagIds.has(tag.id);
+                        return (
+                          <button
+                            key={tag.id}
+                            onClick={() => toggleOrderTag(order.id, tag.id, active)}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all"
+                            style={active
+                              ? { backgroundColor: tag.color + '25', color: tag.color, outline: `1.5px solid ${tag.color}50` }
+                              : { backgroundColor: '#f1f5f9', color: '#94a3b8' }
+                            }
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: active ? tag.color : '#cbd5e1' }} />
+                            {tag.name}
+                            {active && <X size={9} />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-3 pt-2 flex justify-end">
                   <span className="text-[9px] text-slate-300">{new Date(order.created_at).toLocaleDateString()}</span>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]">Детали</Button>
                 </div>
               </div>
-            ))}
+              );
+            })}
             
             {orders.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full py-16 gap-4">
