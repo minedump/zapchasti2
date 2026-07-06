@@ -60,7 +60,7 @@ export default function SettingsPage() {
       <Toaster />
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-          <Palette className="text-blue-600" /> Настройки CRM
+          <Palette className="text-blue-600" /> Настройки PromptFlow
         </h1>
         <p className="text-slate-500 mt-1">Управление справочниками статусов и меток</p>
       </div>

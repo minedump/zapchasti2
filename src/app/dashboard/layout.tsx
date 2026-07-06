@@ -31,7 +31,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="p-2 bg-blue-600 rounded-lg">
             <Bot size={20} className="text-white" />
           </div>
-          <span>CRM Запчасти</span>
+          <span>PromptFlow</span>
         </div>
         <nav className="flex-1 p-4 space-y-2">
           <NavItem href="/dashboard" icon={<MessageSquare size={20} />} label="Чаты" />
