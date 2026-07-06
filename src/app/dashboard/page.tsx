@@ -11,6 +11,7 @@ export default function DashboardPage() {
 
   const [chats, setChats] = useState<any[]>([]);
   const [selectedChat, setSelectedChat] = useState<any>(null);
+  const [hasInitialSelected, setHasInitialSelected] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -39,13 +40,23 @@ export default function DashboardPage() {
     return () => { supabase.removeChannel(chatChannel); };
   }, []);
 
-  // Авто-выбор чата из URL
+  // Авто-выбор чата из URL (только один раз при загрузке)
   useEffect(() => {
-    if (chatIdFromUrl && chats.length > 0) {
+    if (chatIdFromUrl && chats.length > 0 && !hasInitialSelected) {
       const chat = chats.find(c => c.id === chatIdFromUrl);
-      if (chat) setSelectedChat(chat);
+      if (chat) {
+        setSelectedChat(chat);
+        setHasInitialSelected(true);
+      }
     }
-  }, [chatIdFromUrl, chats]);
+  }, [chatIdFromUrl, chats, hasInitialSelected]);
+
+  const handleChatSelect = (chat: any) => {
+    setSelectedChat(chat);
+    // Обновляем URL без перезагрузки страницы, чтобы при обновлении остаться в этом же чате
+    const newUrl = `${window.location.pathname}?chatId=${chat.id}`;
+    window.history.pushState({ path: newUrl }, '', newUrl);
+  };
 
   useEffect(() => {
     if (selectedChat) {
@@ -164,7 +175,7 @@ export default function DashboardPage() {
           {chats.map((chat) => (
             <button
               key={chat.id}
-              onClick={() => setSelectedChat(chat)}
+              onClick={() => handleChatSelect(chat)}
               className={`w-full p-4 flex items-start gap-3 border-b hover:bg-slate-50 transition-colors ${
                 selectedChat?.id === chat.id ? 'bg-blue-50' : ''
               }`}
