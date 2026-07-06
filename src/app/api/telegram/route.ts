@@ -93,6 +93,12 @@ export async function POST(req: Request) {
 
   // 3. Если это команда (начинается с /)
   if (text.startsWith('/')) {
+    // Если бот уже в процессе, не даем переключить команду
+    if (chatData.status === 'bot_processing') {
+      await sendTelegramMessage(telegramChatId, "Пожалуйста, сначала завершите текущий опрос.");
+      return NextResponse.json({ ok: true });
+    }
+
     const { data: commandData } = await supabaseAdmin
       .from('bot_commands')
       .select('*')
@@ -135,7 +141,12 @@ export async function POST(req: Request) {
   // 4. Если работает бот
   if (chatData.status === 'bot_processing') {
     const metadata = chatData.ai_metadata || {};
-    const currentPrompt = metadata.current_prompt || "Ты помощник по запчастям.";
+    const currentPrompt = metadata.current_prompt;
+    
+    if (!currentPrompt) {
+      await supabaseAdmin.from('chats').update({ status: 'operator_needed' }).eq('id', chatData.id);
+      return NextResponse.json({ ok: true });
+    }
     
     const { data: history } = await supabaseAdmin
       .from('messages')
