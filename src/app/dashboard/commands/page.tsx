@@ -37,8 +37,20 @@ export default function CommandsPage() {
   };
 
   const updateCommand = async (id: string, updates: any) => {
-    await supabase.from('bot_commands').update(updates).eq('id', id);
-    fetchCommands();
+    setCommands(commands.map(c => c.id === id ? { ...c, ...updates } : c));
+  };
+
+  const saveCommand = async (cmd: any) => {
+    const { error } = await supabase.from('bot_commands').update({
+      command: cmd.command,
+      description: cmd.description,
+      prompt_template: cmd.prompt_template
+    }).eq('id', cmd.id);
+    
+    if (!error) {
+      alert('Команда сохранена!');
+      fetchCommands();
+    }
   };
 
   const deleteCommand = async (id: string) => {
@@ -86,6 +98,13 @@ export default function CommandsPage() {
                   className="w-full p-2 border rounded-lg"
                 />
               </div>
+              <button 
+                onClick={() => saveCommand(cmd)}
+                className="self-end p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                title="Сохранить изменения"
+              >
+                <Save size={20} />
+              </button>
               <button 
                 onClick={() => deleteCommand(cmd.id)}
                 className="self-end p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
