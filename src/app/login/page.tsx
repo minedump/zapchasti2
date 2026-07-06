@@ -32,6 +32,8 @@ export default function LoginPage() {
           supabaseClient={supabase}
           appearance={{ theme: ThemeSupa }}
           providers={[]}
+          view="sign_in"
+          showLinks={false}
           localization={{
             variables: {
               sign_in: {

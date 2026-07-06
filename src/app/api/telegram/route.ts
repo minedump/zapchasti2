@@ -12,18 +12,12 @@ async function sendTelegramMessage(chatId: number, text: string) {
   });
 }
 
-async function askDeepSeek(prompt: string, history: any[], currentState: any, retryCount: number) {
+async function askDeepSeek(text: string, history: any[], currentState: any, retryCount: number, promptTemplate: string) {
   const systemPrompt = `
-    Ты — AI-агент службы поддержки магазина запчастей.
-    Твоя задача: собрать данные { "vin": string, "part_name": string, "budget": number }.
-    
-    ПРАВИЛА:
-    1. Задавай только ОДИН вопрос за раз.
-    2. Если ответ непонятен, у тебя есть 3 попытки (сейчас попытка №${retryCount + 1}).
-    3. На 3-й неудачной попытке пиши "Пункт пропущен" и переходи к следующему.
-    4. Когда ВСЕ данные собраны, обязательно выведи результат в формате: <RESULT>{"vin": "...", "part_name": "...", "budget": 0}</RESULT>.
+    ${promptTemplate}
     
     ТЕКУЩИЕ ДАННЫЕ: ${JSON.stringify(currentState)}
+    ПОПЫТКА №${retryCount + 1} ДЛЯ ТЕКУЩЕГО ПУНКТА.
   `;
 
   const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -48,9 +42,17 @@ async function askDeepSeek(prompt: string, history: any[], currentState: any, re
 export async function POST(req: Request) {
   const body = await req.json();
   
-  if (!body.message) return NextResponse.json({ ok: true });
+  // Проверка на наличие сообщения и текста
+  if (!body.message || !body.message.text) {
+    return NextResponse.json({ ok: true });
+  }
 
   const { chat, text, from } = body.message;
+  
+  if (!chat || !chat.id) {
+    return NextResponse.json({ ok: true });
+  }
+
   const telegramChatId = chat.id;
 
   // 1. Найти или создать чат
@@ -80,9 +82,53 @@ export async function POST(req: Request) {
     is_from_bot: false
   }]);
 
-  // 3. Если работает бот
+  // 3. Если это команда (начинается с /)
+  if (text.startsWith('/')) {
+    const { data: commandData } = await supabase
+      .from('bot_commands')
+      .select('*')
+      .eq('command', text)
+      .eq('is_active', true)
+      .single();
+
+    if (commandData) {
+      // Сбрасываем метаданные для нового опроса
+      await supabase.from('chats').update({
+        status: 'bot_processing',
+        ai_metadata: {
+          step: 'start',
+          retry_count: 0,
+          collected_data: {},
+          current_prompt: commandData.prompt_template
+        }
+      }).eq('id', chatData.id);
+
+      // Получаем первый ответ от AI на команду
+      const aiResponse = await askDeepSeek(
+        "Начни опрос", 
+        [], 
+        {},
+        0,
+        commandData.prompt_template
+      );
+
+      await sendTelegramMessage(telegramChatId, aiResponse);
+      
+      await supabase.from('messages').insert([{
+        chat_id: chatData.id,
+        content: aiResponse,
+        is_from_bot: true,
+        is_ai_generated: true
+      }]);
+      
+      return NextResponse.json({ ok: true });
+    }
+  }
+
+  // 4. Если работает бот (продолжение диалога)
   if (chatData.status === 'bot_processing') {
-    // Получаем историю для контекста AI
+    const currentPrompt = chatData.ai_metadata.current_prompt || "Ты помощник по запчастям.";
+    
     const { data: history } = await supabase
       .from('messages')
       .select('*')
@@ -93,10 +139,10 @@ export async function POST(req: Request) {
       text, 
       history || [], 
       chatData.ai_metadata.collected_data, 
-      chatData.ai_metadata.retry_count
+      chatData.ai_metadata.retry_count,
+      currentPrompt
     );
 
-    // Проверяем, закончил ли AI сбор данных
     const resultMatch = aiResponse.match(/<RESULT>(.*?)<\/RESULT>/);
     
     if (resultMatch) {
