@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
-import { Search, User, Send, Bot, Tag, ChevronDown } from 'lucide-react';
+import { Search, User, Send, Bot, ShoppingBag } from 'lucide-react';
 import { Button, Input, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { toast, Toaster } from 'react-hot-toast';
@@ -51,6 +51,59 @@ export default function DashboardPage() {
     if (data) setChats(data);
     setLoading(false);
   };
+
+  const handleChatSelect = (chat: any) => {
+    setSelectedChat(chat);
+    const newUrl = `${window.location.pathname}?chatId=${chat.id}`;
+    window.history.pushState({ path: newUrl }, '', newUrl);
+  };
+
+  // Авто-выбор чата из URL (только один раз при загрузке)
+  useEffect(() => {
+    if (chatIdFromUrl && chats.length > 0 && !hasInitialSelected) {
+      const chat = chats.find(c => c.id === chatIdFromUrl);
+      if (chat) {
+        setSelectedChat(chat);
+        setHasInitialSelected(true);
+      }
+    }
+  }, [chatIdFromUrl, chats, hasInitialSelected]);
+
+  useEffect(() => {
+    if (selectedChat) {
+      fetchMessages(selectedChat.id);
+      fetchOrders(selectedChat.id);
+      
+      const msgChannel = supabase
+        .channel(`chat-messages-${selectedChat.id}`)
+        .on('postgres_changes', { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'messages', 
+          filter: `chat_id=eq.${selectedChat.id}` 
+        }, (payload) => {
+          setMessages(prev => prev.find(m => m.id === payload.new.id) ? prev : [...prev, payload.new]);
+        })
+        .subscribe();
+
+      const orderChannel = supabase
+        .channel(`chat-orders-${selectedChat.id}`)
+        .on('postgres_changes', { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'orders', 
+          filter: `chat_id=eq.${selectedChat.id}` 
+        }, (payload) => {
+          fetchOrders(selectedChat.id);
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(msgChannel);
+        supabase.removeChannel(orderChannel);
+      };
+    }
+  }, [selectedChat]);
 
   const fetchMessages = async (chatId: string) => {
     const { data } = await supabase
@@ -147,10 +200,14 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className={cn(
-                      "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
+                      "flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
                       chat.status === 'bot_processing' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
                     )}>
-                      {chat.status === 'bot_processing' ? '🤖 AI' : '👤 Оператор'}
+                      {chat.status === 'bot_processing' ? (
+                        <><Bot size={12} /> AI</>
+                      ) : (
+                        <><User size={12} /> Оператор</>
+                      )}
                     </span>
                   </div>
                 </div>
