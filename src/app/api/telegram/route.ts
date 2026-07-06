@@ -151,6 +151,36 @@ export async function POST(req: Request) {
       currentPrompt
     );
 
+    // Логика парсинга результата
+    const resultMatch = aiResponse.match(/<RESULT>([\s\S]*?)<\/RESULT>/i);
+    
+    if (resultMatch) {
+      try {
+        const jsonString = resultMatch[1].trim();
+        const finalJson = JSON.parse(jsonString);
+        
+        await supabaseAdmin.from('chats').update({
+          status: 'operator_needed',
+          ai_metadata: { ...metadata, collected_data: finalJson }
+        }).eq('id', chatData.id);
+
+        const cleanMessage = aiResponse.replace(/<RESULT>[\s\S]*?<\/RESULT>/i, "").trim();
+        await sendTelegramMessage(telegramChatId, cleanMessage + "\n\n✅ Данные собраны. Сейчас подключится оператор.");
+      } catch (e) {
+        console.error('JSON Parse Error:', e);
+        await sendTelegramMessage(telegramChatId, aiResponse);
+      }
+    } else {
+      await sendTelegramMessage(telegramChatId, aiResponse);
+    }
+
+    await supabaseAdmin.from('messages').insert([{
+      chat_id: chatData.id,
+      content: aiResponse.replace(/<RESULT>[\s\S]*?<\/RESULT>/i, "").trim(),
+      is_from_bot: true,
+      is_ai_generated: true
+    }]);
+
     const resultMatch = aiResponse.match(/<RESULT>(.*?)<\/RESULT>/);
     
     if (resultMatch) {
