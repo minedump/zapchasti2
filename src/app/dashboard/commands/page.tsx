@@ -107,13 +107,13 @@ export default function CommandsPage() {
             <div 
               key={cmd.id} 
               className={cn(
-                "group bg-white rounded-2xl border transition-all duration-200",
+                "w-full bg-white rounded-2xl border transition-all duration-200",
                 editingId === cmd.id ? "border-blue-500 ring-4 ring-blue-50 ring-offset-0" : "border-slate-200 hover:border-slate-300 hover:shadow-md"
               )}
             >
               {editingId === cmd.id ? (
                 <div className="p-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase ml-1">Команда</label>
                       <Input 
@@ -148,25 +148,25 @@ export default function CommandsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="p-6 flex items-start justify-between">
-                  <div className="space-y-3 flex-1">
-                    <div className="flex items-center gap-3">
-                      <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-bold font-mono">
-                        {cmd.command}
+                <div className="p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex flex-col md:flex-row md:items-center gap-3">
+                      <span className="w-fit px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-bold font-mono">
+                        {cmd.command || '/...'}
                       </span>
-                      <h3 className="font-semibold text-slate-800">{cmd.description}</h3>
+                      <h3 className="font-semibold text-slate-800">{cmd.description || 'Без описания'}</h3>
                     </div>
-                    <div className="text-sm text-slate-500 line-clamp-2 pr-10">
-                      {cmd.prompt_template}
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(cmd)} className="p-2">
+                        <Edit3 size={18} />
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => handleDelete(cmd.id)} className="p-2">
+                        <Trash2 size={18} />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="sm" onClick={() => handleEdit(cmd)} className="p-2">
-                      <Edit3 size={18} />
-                    </Button>
-                    <Button variant="danger" size="sm" onClick={() => handleDelete(cmd.id)} className="p-2">
-                      <Trash2 size={18} />
-                    </Button>
+                  <div className="text-sm text-slate-500 bg-slate-50 p-4 rounded-xl border border-slate-100 whitespace-pre-wrap">
+                    {cmd.prompt_template || 'Инструкции не заданы'}
                   </div>
                 </div>
               )}
