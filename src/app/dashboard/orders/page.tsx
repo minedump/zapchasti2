@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { ShoppingBag, MessageCircle, ExternalLink } from 'lucide-react';
+import { ShoppingBag, MessageCircle, Calendar, User } from 'lucide-react';
+import { Button, Skeleton } from '@/components/ui';
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -15,11 +16,13 @@ export default function OrdersPage() {
   }, []);
 
   const fetchOrders = async () => {
-    const { data, error } = await supabase
+    setLoading(true);
+    const { data } = await supabase
       .from('orders')
       .select(`
         *,
-        chats (id, customer_name, telegram_chat_id)
+        chats (id, customer_name, telegram_chat_id),
+        order_statuses (name, color)
       `)
       .order('created_at', { ascending: false });
 
@@ -28,61 +31,75 @@ export default function OrdersPage() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-8 max-w-5xl mx-auto w-full">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          <ShoppingBag className="text-blue-600" /> Все заказы
-        </h1>
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+            <ShoppingBag className="text-blue-600" /> Все заказы
+          </h1>
+          <p className="text-slate-500 mt-1">История всех запросов от клиентов</p>
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="p-4 text-xs font-semibold text-slate-500 uppercase">№ Заказа</th>
-              <th className="p-4 text-xs font-semibold text-slate-500 uppercase">Клиент</th>
-              <th className="p-4 text-xs font-semibold text-slate-500 uppercase">Данные</th>
-              <th className="p-4 text-xs font-semibold text-slate-500 uppercase">Дата</th>
-              <th className="p-4 text-xs font-semibold text-slate-500 uppercase text-right">Действия</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {orders.map((order) => (
-              <tr key={order.id} className="hover:bg-slate-50 transition-colors">
-                <td className="p-4">
-                  <span className="font-mono font-bold text-blue-600">#{order.order_number}</span>
-                </td>
-                <td className="p-4">
-                  <div className="font-medium text-slate-700">{order.chats?.customer_name || 'Неизвестно'}</div>
-                  <div className="text-xs text-slate-400">ID: {order.chats?.telegram_chat_id}</div>
-                </td>
-                <td className="p-4">
+      <div className="grid gap-6">
+        {loading ? (
+          [1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)
+        ) : (
+          orders.map((order) => (
+            <div key={order.id} className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-3 flex-1">
+                  <div className="flex items-center gap-3">
+                    <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-bold font-mono">
+                      #{order.order_number}
+                    </span>
+                    <div className="flex items-center gap-2 text-slate-800 font-semibold">
+                      <User size={16} className="text-slate-400" />
+                      {order.chats?.customer_name || 'Клиент'}
+                    </div>
+                    {order.order_statuses && (
+                      <span 
+                        className="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase"
+                        style={{ backgroundColor: order.order_statuses.color + '20', color: order.order_statuses.color }}
+                      >
+                        {order.order_statuses.name}
+                      </span>
+                    )}
+                  </div>
+                  
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(order.data || {}).map(([key, value]: [string, any]) => (
-                      <span key={key} className="px-2 py-1 bg-slate-100 rounded text-[10px] text-slate-600">
-                        <span className="font-semibold">{key}:</span> {String(value)}
-                      </span>
+                      <div key={key} className="px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
+                        <span className="text-slate-400 mr-1">{key}:</span>
+                        <span className="font-medium text-slate-700">{String(value)}</span>
+                      </div>
                     ))}
                   </div>
-                </td>
-                <td className="p-4 text-sm text-slate-500">
-                  {new Date(order.created_at).toLocaleString()}
-                </td>
-                <td className="p-4 text-right">
-                  <button 
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="text-right hidden md:block">
+                    <div className="text-xs text-slate-400 flex items-center justify-end gap-1">
+                      <Calendar size={12} />
+                      {new Date(order.created_at).toLocaleDateString()}
+                    </div>
+                    <div className="text-[10px] text-slate-300">{new Date(order.created_at).toLocaleTimeString()}</div>
+                  </div>
+                  <Button 
+                    variant="secondary" 
                     onClick={() => router.push(`/dashboard?chatId=${order.chat_id}`)}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                    className="gap-2"
                   >
-                    <MessageCircle size={16} /> В чат
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        
+                    <MessageCircle size={18} /> В чат
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+
         {orders.length === 0 && !loading && (
-          <div className="p-12 text-center text-slate-400">
+          <div className="text-center py-20 text-slate-400 bg-white rounded-2xl border-2 border-dashed">
             Заказов пока нет
           </div>
         )}

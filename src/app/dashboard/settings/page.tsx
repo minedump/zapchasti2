@@ -56,35 +56,43 @@ export default function SettingsPage() {
   if (loading) return <div className="p-8"><Skeleton className="h-20 w-full mb-4" /><Skeleton className="h-64 w-full" /></div>;
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="p-8 max-w-5xl mx-auto w-full">
       <Toaster />
-      <h1 className="text-3xl font-bold text-slate-900 mb-8 flex items-center gap-3">
-        <Settings className="text-slate-400" /> Настройки CRM
-      </h1>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+          <Palette className="text-blue-600" /> Настройки CRM
+        </h1>
+        <p className="text-slate-500 mt-1">Управление справочниками статусов и меток</p>
+      </div>
 
-      <div className="grid md:grid-cols-2 gap-8">
+      <div className="space-y-8">
         {/* Статусы */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="font-bold text-slate-800 flex items-center gap-2"><Palette size={18} /> Статусы заказов</h2>
-            <Button size="sm" onClick={addStatus}><Plus size={16} /></Button>
+            <div>
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">Статусы заказов</h2>
+              <p className="text-sm text-slate-400">Определяют этап обработки запроса</p>
+            </div>
+            <Button onClick={addStatus} className="gap-2"><Plus size={18} /> Добавить</Button>
           </div>
-          <div className="space-y-3">
+          <div className="grid gap-3">
             {statuses.map(s => (
-              <div key={s.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="color" 
-                    value={s.color} 
-                    onChange={e => updateColor('order_statuses', s.id, e.target.value)}
-                    className="w-6 h-6 rounded cursor-pointer border-none bg-transparent"
-                  />
-                  <span className="font-medium text-slate-700">{s.name}</span>
-                  {s.is_system && <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded uppercase">Системный</span>}
+              <div key={s.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-slate-200 transition-all">
+                <div className="flex items-center gap-4">
+                  <div className="relative group">
+                    <input 
+                      type="color" 
+                      value={s.color} 
+                      onChange={e => updateColor('order_statuses', s.id, e.target.value)}
+                      className="w-8 h-8 rounded-lg cursor-pointer border-2 border-white shadow-sm"
+                    />
+                  </div>
+                  <span className="font-bold text-slate-700">{s.name}</span>
+                  {s.is_system && <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase">Системный</span>}
                 </div>
                 {!s.is_system && (
-                  <Button variant="ghost" size="sm" onClick={() => deleteItem('order_statuses', s.id, s.is_system)}>
-                    <Trash2 size={16} className="text-red-400" />
+                  <Button variant="danger" size="sm" onClick={() => deleteItem('order_statuses', s.id, s.is_system)} className="p-2">
+                    <Trash2 size={18} />
                   </Button>
                 )}
               </div>
@@ -93,25 +101,28 @@ export default function SettingsPage() {
         </div>
 
         {/* Метки */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="font-bold text-slate-800 flex items-center gap-2"><Tag size={18} /> Метки (Теги)</h2>
-            <Button size="sm" onClick={addTag}><Plus size={16} /></Button>
+            <div>
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">Метки (Теги)</h2>
+              <p className="text-sm text-slate-400">Для дополнительной классификации чатов</p>
+            </div>
+            <Button onClick={addTag} className="gap-2"><Plus size={18} /> Добавить</Button>
           </div>
-          <div className="space-y-3">
+          <div className="grid gap-3">
             {tags.map(t => (
-              <div key={t.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <div className="flex items-center gap-3">
+              <div key={t.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-slate-200 transition-all">
+                <div className="flex items-center gap-4">
                   <input 
                     type="color" 
                     value={t.color} 
                     onChange={e => updateColor('tags', t.id, e.target.value)}
-                    className="w-6 h-6 rounded cursor-pointer border-none bg-transparent"
+                    className="w-8 h-8 rounded-lg cursor-pointer border-2 border-white shadow-sm"
                   />
-                  <span className="font-medium text-slate-700">{t.name}</span>
+                  <span className="font-bold text-slate-700">{t.name}</span>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => deleteItem('tags', t.id, false)}>
-                  <Trash2 size={16} className="text-red-400" />
+                <Button variant="danger" size="sm" onClick={() => deleteItem('tags', t.id, false)} className="p-2">
+                  <Trash2 size={18} />
                 </Button>
               </div>
             ))}
