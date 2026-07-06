@@ -180,31 +180,6 @@ export async function POST(req: Request) {
       is_from_bot: true,
       is_ai_generated: true
     }]);
-
-    const resultMatch = aiResponse.match(/<RESULT>(.*?)<\/RESULT>/);
-    
-    if (resultMatch) {
-      try {
-        const finalJson = JSON.parse(resultMatch[1]);
-        await supabaseAdmin.from('chats').update({
-          status: 'operator_needed',
-          ai_metadata: { ...metadata, collected_data: finalJson }
-        }).eq('id', chatData.id);
-
-        await sendTelegramMessage(telegramChatId, aiResponse.replace(/<RESULT>.*?<\/RESULT>/, "") + "\n\n✅ Данные собраны. Сейчас подключится оператор.");
-      } catch (e) {
-        await sendTelegramMessage(telegramChatId, aiResponse);
-      }
-    } else {
-      await sendTelegramMessage(telegramChatId, aiResponse);
-    }
-
-    await supabaseAdmin.from('messages').insert([{
-      chat_id: chatData.id,
-      content: aiResponse.replace(/<RESULT>.*?<\/RESULT>/, ""),
-      is_from_bot: true,
-      is_ai_generated: true
-    }]);
   }
 
   return NextResponse.json({ ok: true });
