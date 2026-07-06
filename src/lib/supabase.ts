@@ -13,14 +13,3 @@ export const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey || supabas
     persistSession: false
   }
 });
-
-
-// Клиент с правами админа для использования только на стороне сервера (API)
-export const supabaseAdmin = serviceRoleKey 
-  ? createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
-  : supabase;
