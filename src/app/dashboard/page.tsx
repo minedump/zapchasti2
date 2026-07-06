@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
-import { Search, User, Send, Bot, ShoppingBag } from 'lucide-react';
+import { Search, Send, Bot, ShoppingBag, User } from 'lucide-react';
 import { Button, Input, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { toast, Toaster } from 'react-hot-toast';
@@ -161,7 +161,7 @@ export default function DashboardPage() {
       <Toaster />
       {/* Chat List */}
       <div className="w-80 border-r flex flex-col bg-slate-50/50">
-        <div className="p-4 border-b bg-white">
+        <div className="h-[65px] px-4 border-b bg-white flex items-center">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <Input 
@@ -173,9 +173,15 @@ export default function DashboardPage() {
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             [1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="p-4 border-b space-y-2">
-                <div className="flex justify-between"><Skeleton className="h-4 w-24" /><Skeleton className="h-3 w-10" /></div>
-                <Skeleton className="h-3 w-full" />
+              <div key={i} className="p-4 border-b flex items-start gap-3">
+                <Skeleton className="w-10 h-10 rounded-full shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-3 w-10" />
+                  </div>
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
               </div>
             ))
           ) : (
@@ -188,9 +194,7 @@ export default function DashboardPage() {
                   selectedChat?.id === chat.id ? "bg-white shadow-sm z-10" : "hover:bg-white/50"
                 )}
               >
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                  <User size={20} />
-                </div>
+                <ChatAvatar name={chat.customer_name} color={chat.avatar_color} />
                 <div className="flex-1 text-left min-w-0">
                   <div className="flex justify-between items-center mb-1">
                     <span className="font-bold text-slate-800 truncate">{chat.customer_name || 'Клиент'}</span>
@@ -221,7 +225,7 @@ export default function DashboardPage() {
       <div className="flex-1 flex flex-col bg-slate-50">
         {selectedChat ? (
           <>
-            <div className="p-4 bg-white border-b flex justify-between items-center shadow-sm">
+            <div className="h-[65px] px-4 bg-white border-b flex justify-between items-center shadow-sm">
               <div>
                 <h2 className="font-bold text-slate-800">{selectedChat.customer_name || 'Чат с клиентом'}</h2>
                 <p className="text-[10px] text-slate-400 font-mono uppercase tracking-wider">Telegram ID: {selectedChat.telegram_chat_id}</p>
@@ -291,7 +295,7 @@ export default function DashboardPage() {
       {/* Right Info Panel */}
       {selectedChat && (
         <div className="w-80 border-l bg-slate-50/30 flex flex-col">
-          <div className="p-4 border-b bg-white">
+          <div className="h-[65px] px-4 border-b bg-white flex items-center">
             <h3 className="font-bold text-slate-800 flex items-center gap-2">
               <ShoppingBag size={18} className="text-blue-600" /> Заказы клиента
             </h3>
@@ -348,6 +352,30 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const AVATAR_COLOR_MAP: Record<string, { bg: string; text: string }> = {
+  rose:    { bg: 'bg-rose-100',    text: 'text-rose-600' },
+  pink:    { bg: 'bg-pink-100',    text: 'text-pink-600' },
+  fuchsia: { bg: 'bg-fuchsia-100', text: 'text-fuchsia-600' },
+  violet:  { bg: 'bg-violet-100',  text: 'text-violet-600' },
+  indigo:  { bg: 'bg-indigo-100',  text: 'text-indigo-600' },
+  sky:     { bg: 'bg-sky-100',     text: 'text-sky-600' },
+  teal:    { bg: 'bg-teal-100',    text: 'text-teal-600' },
+  emerald: { bg: 'bg-emerald-100', text: 'text-emerald-600' },
+  amber:   { bg: 'bg-amber-100',   text: 'text-amber-600' },
+  orange:  { bg: 'bg-orange-100',  text: 'text-orange-600' },
+  slate:   { bg: 'bg-slate-100',   text: 'text-slate-600' },
+};
+
+function ChatAvatar({ name, color }: { name?: string; color?: string }) {
+  const letter = name ? name.trim()[0].toUpperCase() : '?';
+  const scheme = AVATAR_COLOR_MAP[color || 'slate'] ?? AVATAR_COLOR_MAP.slate;
+  return (
+    <div className={cn('w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0', scheme.bg, scheme.text)}>
+      {letter}
     </div>
   );
 }

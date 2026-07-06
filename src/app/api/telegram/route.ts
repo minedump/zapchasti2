@@ -4,6 +4,11 @@ import { NextResponse } from 'next/server';
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
+const AVATAR_COLORS = ['rose', 'pink', 'fuchsia', 'violet', 'indigo', 'sky', 'teal', 'emerald', 'amber', 'orange'];
+function pickAvatarColor(telegramChatId: number): string {
+  return AVATAR_COLORS[Math.abs(telegramChatId) % AVATAR_COLORS.length];
+}
+
 async function sendTelegramMessage(chatId: number, text: string) {
   await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
     method: 'POST',
@@ -68,6 +73,7 @@ export async function POST(req: Request) {
         telegram_chat_id: telegramChatId, 
         customer_name: from?.first_name + (from?.last_name ? ` ${from.last_name}` : ''),
         status: 'bot_processing',
+        avatar_color: pickAvatarColor(telegramChatId),
         ai_metadata: { step: 'start', retry_count: 0, collected_data: {} }
       }])
       .select()

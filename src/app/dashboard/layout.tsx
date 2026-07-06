@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { MessageSquare, Settings, LogOut, Bot, ShoppingBag, Palette } from 'lucide-react';
+import { Button } from '@/components/ui';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -40,12 +41,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <NavItem href="/dashboard/settings" icon={<Palette size={20} />} label="Настройки" />
         </nav>
         <div className="p-4 border-t border-slate-800">
-          <button 
+          <Button
+            variant="ghost"
             onClick={() => supabase.auth.signOut().then(() => router.push('/login'))}
-            className="flex items-center gap-3 p-3 w-full rounded-xl hover:bg-red-900/30 text-red-400 transition-all"
+            className="flex items-center gap-3 p-3 w-full rounded-xl hover:bg-red-900/30 text-red-400 hover:text-red-400"
           >
             <LogOut size={20} /> Выйти
-          </button>
+          </Button>
         </div>
       </aside>
 
