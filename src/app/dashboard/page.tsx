@@ -23,14 +23,16 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchChats();
     
+    // Подписка на любые изменения в таблице чатов (новые чаты, новые сообщения, смена статуса)
     const chatChannel = supabase
-      .channel('public-chats')
+      .channel('global-chat-updates')
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
         table: 'chats' 
-      }, () => {
-        fetchChats();
+      }, (payload) => {
+        console.log('Chat change detected:', payload);
+        fetchChats(); // Самый надежный способ обновить список с учетом сортировки
       })
       .subscribe();
 
