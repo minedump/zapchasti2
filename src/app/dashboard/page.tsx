@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, User, Send, Bot, User round } from 'lucide-react';
+import { Search, User, Send, Bot } from 'lucide-react';
 
 export default function DashboardPage() {
   const [chats, setChats] = useState<any[]>([]);
