@@ -8,6 +8,7 @@ export default function DashboardPage() {
   const [chats, setChats] = useState<any[]>([]);
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -35,8 +36,9 @@ export default function DashboardPage() {
   useEffect(() => {
     if (selectedChat) {
       fetchMessages(selectedChat.id);
+      fetchOrders(selectedChat.id);
       
-      // Подписка на новые сообщения именно для этого чата
+      // Подписка на сообщения
       const msgChannel = supabase
         .channel(`chat-messages-${selectedChat.id}`)
         .on('postgres_changes', { 
@@ -45,15 +47,27 @@ export default function DashboardPage() {
           table: 'messages', 
           filter: `chat_id=eq.${selectedChat.id}` 
         }, (payload) => {
-          setMessages(prev => {
-            // Проверка на дубликаты (на случай если сообщение уже добавлено локально)
-            if (prev.find(m => m.id === payload.new.id)) return prev;
-            return [...prev, payload.new];
-          });
+          setMessages(prev => prev.find(m => m.id === payload.new.id) ? prev : [...prev, payload.new]);
         })
         .subscribe();
 
-      return () => { supabase.removeChannel(msgChannel); };
+      // Подписка на новые заказы
+      const orderChannel = supabase
+        .channel(`chat-orders-${selectedChat.id}`)
+        .on('postgres_changes', { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'orders', 
+          filter: `chat_id=eq.${selectedChat.id}` 
+        }, (payload) => {
+          setOrders(prev => [payload.new, ...prev]);
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(msgChannel);
+        supabase.removeChannel(orderChannel);
+      };
     }
   }, [selectedChat]);
 
@@ -74,6 +88,15 @@ export default function DashboardPage() {
       .eq('chat_id', chatId)
       .order('created_at', { ascending: true });
     if (data) setMessages(data);
+  };
+
+  const fetchOrders = async (chatId: string) => {
+    const { data } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('chat_id', chatId)
+      .order('created_at', { ascending: false });
+    if (data) setOrders(data);
   };
 
   const sendMessage = async () => {
@@ -233,23 +256,34 @@ export default function DashboardPage() {
 
       {/* Right Info Panel */}
       {selectedChat && (
-        <div className="w-72 border-l bg-white p-4">
-          <h3 className="font-bold text-slate-800 mb-4">Данные клиента</h3>
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs text-slate-400 uppercase">Собрано AI</label>
-              <div className="mt-2 space-y-2">
-                {Object.entries(selectedChat.ai_metadata.collected_data || {}).map(([key, value]: [string, any]) => (
-                  <div key={key} className="p-2 bg-slate-50 rounded border border-slate-100">
-                    <span className="text-[10px] text-slate-400 uppercase block">{key}</span>
-                    <span className="text-sm font-medium">{String(value)}</span>
-                  </div>
-                ))}
-                {Object.keys(selectedChat.ai_metadata.collected_data || {}).length === 0 && (
-                  <p className="text-xs text-slate-400 italic">Данные еще не собраны</p>
-                )}
+        <div className="w-80 border-l bg-white flex flex-col">
+          <div className="p-4 border-b">
+            <h3 className="font-bold text-slate-800">Заказы клиента</h3>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {orders.map((order) => (
+              <div key={order.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-bold text-blue-600 uppercase">Заказ #{order.order_number}</span>
+                  <span className="text-[10px] text-slate-400">
+                    {new Date(order.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {Object.entries(order.data || {}).map(([key, value]: [string, any]) => (
+                    <div key={key} className="flex justify-between text-xs">
+                      <span className="text-slate-400">{key}:</span>
+                      <span className="font-medium text-slate-700">{String(value)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            ))}
+            {orders.length === 0 && (
+              <div className="text-center py-10 text-slate-400 text-sm italic">
+                Заказов пока нет
+              </div>
+            )}
           </div>
         </div>
       )}

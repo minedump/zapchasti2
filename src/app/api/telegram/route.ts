@@ -159,6 +159,12 @@ export async function POST(req: Request) {
         const jsonString = resultMatch[1].trim();
         const finalJson = JSON.parse(jsonString);
         
+        // Создаем новый заказ
+        await supabaseAdmin.from('orders').insert([{
+          chat_id: chatData.id,
+          data: finalJson
+        }]);
+
         await supabaseAdmin.from('chats').update({
           status: 'operator_needed',
           ai_metadata: { ...metadata, collected_data: finalJson }
