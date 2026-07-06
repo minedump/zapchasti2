@@ -40,6 +40,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <a href="/dashboard/commands" className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-800 transition-colors">
             <Settings size={20} /> Команды AI
           </a>
+          <a href="/dashboard/settings" className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-800 transition-colors">
+            <Settings size={20} /> Настройки
+          </a>
         </nav>
         <div className="p-4 border-t border-slate-800">
           <button 

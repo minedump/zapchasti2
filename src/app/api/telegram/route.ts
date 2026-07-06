@@ -170,10 +170,18 @@ export async function POST(req: Request) {
         const jsonString = resultMatch[1].trim();
         const finalJson = JSON.parse(jsonString);
         
+        // Получаем ID статуса 'Новый'
+        const { data: statusData } = await supabaseAdmin
+          .from('order_statuses')
+          .select('id')
+          .eq('name', 'Новый')
+          .single();
+
         // Создаем новый заказ
         await supabaseAdmin.from('orders').insert([{
           chat_id: chatData.id,
-          data: finalJson
+          data: finalJson,
+          status_id: statusData?.id
         }]);
 
         await supabaseAdmin.from('chats').update({
