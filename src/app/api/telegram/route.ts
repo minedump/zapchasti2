@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin } from '@/lib/supabase';
 import { NextResponse } from 'next/server';
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -47,24 +47,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
   
-  // Максимально строгая проверка: нам нужно только текстовое сообщение
   if (!body || !body.message || !body.message.chat || !body.message.chat.id || !body.message.text) {
-    console.log('Ignoring non-text update:', body);
     return NextResponse.json({ ok: true });
   }
 
   const { chat, text, from } = body.message;
   const telegramChatId = chat.id;
 
-  // 1. Найти или создать чат
-  let { data: chatData, error: chatError } = await supabase
+  // 1. Найти или создать чат через Admin Client
+  let { data: chatData, error: chatError } = await supabaseAdmin
     .from('chats')
     .select('*')
     .eq('telegram_chat_id', telegramChatId)
     .maybeSingle();
 
   if (!chatData) {
-    const { data: newChat, error: createError } = await supabase
+    const { data: newChat, error: createError } = await supabaseAdmin
       .from('chats')
       .insert([{ 
         telegram_chat_id: telegramChatId, 
@@ -87,7 +85,7 @@ export async function POST(req: Request) {
   }
 
   // 2. Сохранить входящее сообщение
-  await supabase.from('messages').insert([{
+  await supabaseAdmin.from('messages').insert([{
     chat_id: chatData.id,
     content: text,
     is_from_bot: false
@@ -95,16 +93,15 @@ export async function POST(req: Request) {
 
   // 3. Если это команда (начинается с /)
   if (text.startsWith('/')) {
-    const { data: commandData } = await supabase
+    const { data: commandData } = await supabaseAdmin
       .from('bot_commands')
       .select('*')
       .eq('command', text)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
     if (commandData) {
-      // Сбрасываем метаданные для нового опроса
-      await supabase.from('chats').update({
+      await supabaseAdmin.from('chats').update({
         status: 'bot_processing',
         ai_metadata: {
           step: 'start',
@@ -114,7 +111,6 @@ export async function POST(req: Request) {
         }
       }).eq('id', chatData.id);
 
-      // Получаем первый ответ от AI на команду
       const aiResponse = await askDeepSeek(
         "Начни опрос", 
         [], 
@@ -125,7 +121,7 @@ export async function POST(req: Request) {
 
       await sendTelegramMessage(telegramChatId, aiResponse);
       
-      await supabase.from('messages').insert([{
+      await supabaseAdmin.from('messages').insert([{
         chat_id: chatData.id,
         content: aiResponse,
         is_from_bot: true,
@@ -136,12 +132,12 @@ export async function POST(req: Request) {
     }
   }
 
-  // 4. Если работает бот (продолжение диалога)
+  // 4. Если работает бот
   if (chatData.status === 'bot_processing') {
     const metadata = chatData.ai_metadata || {};
     const currentPrompt = metadata.current_prompt || "Ты помощник по запчастям.";
     
-    const { data: history } = await supabase
+    const { data: history } = await supabaseAdmin
       .from('messages')
       .select('*')
       .eq('chat_id', chatData.id)
@@ -156,6 +152,34 @@ export async function POST(req: Request) {
     );
 
     const resultMatch = aiResponse.match(/<RESULT>(.*?)<\/RESULT>/);
+    
+    if (resultMatch) {
+      try {
+        const finalJson = JSON.parse(resultMatch[1]);
+        await supabaseAdmin.from('chats').update({
+          status: 'operator_needed',
+          ai_metadata: { ...metadata, collected_data: finalJson }
+        }).eq('id', chatData.id);
+
+        await sendTelegramMessage(telegramChatId, aiResponse.replace(/<RESULT>.*?<\/RESULT>/, "") + "\n\n✅ Данные собраны. Сейчас подключится оператор.");
+      } catch (e) {
+        await sendTelegramMessage(telegramChatId, aiResponse);
+      }
+    } else {
+      await sendTelegramMessage(telegramChatId, aiResponse);
+    }
+
+    await supabaseAdmin.from('messages').insert([{
+      chat_id: chatData.id,
+      content: aiResponse.replace(/<RESULT>.*?<\/RESULT>/, ""),
+      is_from_bot: true,
+      is_ai_generated: true
+    }]);
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
     
     if (resultMatch) {
       const finalJson = JSON.parse(resultMatch[1]);

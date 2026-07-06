@@ -25,9 +25,16 @@ create policy "Profiles are viewable by authenticated" on public.profiles
 create policy "Users can update own profile" on public.profiles
   for update to authenticated using (auth.uid() = id);
 
+-- Разрешаем чтение команд всем (для API)
 create policy "Public read commands" on public.bot_commands
   for select using (is_active = true);
 
+-- Разрешаем вставку чатов и сообщений всем (для Webhook)
+create policy "Enable insert for everyone on chats" on public.chats for insert with check (true);
+create policy "Enable update for everyone on chats" on public.chats for update using (true);
+create policy "Enable insert for everyone on messages" on public.messages for insert with check (true);
+
+-- Управление для админов
 create policy "Admins manage commands" on public.bot_commands
   for all to authenticated using (
     (select role from public.profiles where id = auth.uid()) = 'admin'
