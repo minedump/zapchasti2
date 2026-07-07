@@ -21,6 +21,19 @@ interface Account {
   last_message_at?: string;
 }
 
+// Транзиентные ошибки поллинга (acc.error/error_at) — фоновый шум, не показываем
+// оператору вовсе. Фатальные (acc.fatal_error) — только они реально требуют
+// действия ("Повторить"), но техническую строку переводим в понятную причину.
+function describeFatalError(err: string): string {
+  if (/timeout|aborted due to timeout/i.test(err)) {
+    return 'Код для входа просрочился';
+  }
+  if (/expired/i.test(err)) {
+    return 'Код для входа истёк';
+  }
+  return err;
+}
+
 const STATUS_LABELS: Record<AccountStatus, { label: string; className: string }> = {
   not_started: { label: 'Не запущен', className: 'bg-slate-100 text-slate-500' },
   pending_qr: { label: 'Ждём сканирования', className: 'bg-amber-100 text-amber-700' },
@@ -276,12 +289,10 @@ export default function WeChatPage() {
                     </div>
                   )}
 
-                  {(acc.fatal_error || acc.error) && (
+                  {acc.fatal_error && (
                     <div className="flex items-start gap-2 text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
                       <AlertCircle size={14} className="shrink-0 mt-0.5 text-slate-400" />
-                      <span className="break-all">
-                        {acc.fatal_error ? `Критическая ошибка: ${acc.fatal_error}` : `Последняя ошибка поллинга: ${acc.error}`}
-                      </span>
+                      <span className="break-all">{describeFatalError(acc.fatal_error)}</span>
                     </div>
                   )}
 
