@@ -99,8 +99,9 @@ export async function POST(req: Request) {
 
   // 3. Если это команда (начинается с /)
   if (text.startsWith('/')) {
-    // Если бот уже в процессе, не даем переключить команду
-    if (chatData.status === 'bot_processing') {
+    // Блокируем переключение, только если уже идёт другая команда,
+    // а не просто потому что бот в режиме агента по умолчанию
+    if (chatData.active_command_id) {
       await sendTelegramMessage(telegramChatId, "Пожалуйста, сначала завершите текущий опрос.");
       return NextResponse.json({ ok: true });
     }
@@ -115,11 +116,11 @@ export async function POST(req: Request) {
     if (commandData) {
       await supabaseAdmin.from('chats').update({
         status: 'bot_processing',
+        active_command_id: commandData.id,
         ai_metadata: {
           step: 'start',
           retry_count: 0,
-          collected_data: {},
-          current_prompt: commandData.prompt_template
+          collected_data: {}
         }
       }).eq('id', chatData.id);
 
@@ -147,9 +148,20 @@ export async function POST(req: Request) {
   // 4. Если работает бот
   if (chatData.status === 'bot_processing') {
     const metadata = chatData.ai_metadata || {};
-    let currentPrompt = metadata.current_prompt;
-    
-    // Если промпта нет (дефолтный режим), берем его из настроек и добавляем знания
+    let currentPrompt: string | undefined;
+
+    // Если есть активная команда, промпт берём из bot_commands напрямую —
+    // так изменения в разделе "Команды AI" применяются сразу, а не только к новым опросам
+    if (chatData.active_command_id) {
+      const { data: activeCommand } = await supabaseAdmin
+        .from('bot_commands')
+        .select('prompt_template')
+        .eq('id', chatData.active_command_id)
+        .maybeSingle();
+      currentPrompt = activeCommand?.prompt_template;
+    }
+
+    // Если промпта нет (дефолтный режим или команда была удалена), берем его из настроек и добавляем знания
     if (!currentPrompt) {
       const { data: settings } = await supabaseAdmin
         .from('bot_settings')
@@ -210,7 +222,8 @@ export async function POST(req: Request) {
 
         await supabaseAdmin.from('chats').update({
           status: 'operator_needed',
-          ai_metadata: { ...metadata, collected_data: finalJson }
+          active_command_id: null,
+          ai_metadata: { collected_data: finalJson }
         }).eq('id', chatData.id);
 
         const cleanMessage = aiResponse.replace(/<RESULT>[\s\S]*?<\/RESULT>/i, "").trim();

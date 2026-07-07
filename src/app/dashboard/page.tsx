@@ -88,10 +88,17 @@ export default function DashboardPage() {
   const fetchChats = async () => {
     const { data } = await supabase
       .from('chats')
-      .select('*')
+      .select('*, active_command:bot_commands(command, description)')
       .order('last_message_at', { ascending: false });
     if (data) setChats(data);
     setLoading(false);
+  };
+
+  const resetActiveCommand = async () => {
+    if (!selectedChat) return;
+    await supabase.from('chats').update({ active_command_id: null }).eq('id', selectedChat.id);
+    setSelectedChat({ ...selectedChat, active_command_id: null, active_command: null });
+    toast.success('Команда сброшена');
   };
 
   const handleChatSelect = (chat: any) => {
@@ -254,8 +261,9 @@ export default function DashboardPage() {
       });
       
       // 3. Если оператор ответил, переводим чат в статус 'operator_needed' (или оставляем)
+      // и снимаем активную команду — раз оператор вмешался, опрос дальше не ведётся
       if (selectedChat.status === 'bot_processing') {
-        await supabase.from('chats').update({ status: 'operator_needed' }).eq('id', selectedChat.id);
+        await supabase.from('chats').update({ status: 'operator_needed', active_command_id: null }).eq('id', selectedChat.id);
       }
 
       setNewMessage('');
@@ -308,7 +316,7 @@ export default function DashboardPage() {
                       {new Date(chat.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className={cn(
                       "flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
                       chat.status === 'bot_processing' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
@@ -322,6 +330,11 @@ export default function DashboardPage() {
                     <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-sky-100 text-sky-500">
                       <TelegramIcon size={11} /> TG
                     </span>
+                    {chat.active_command && (
+                      <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-slate-200 text-slate-600 font-mono">
+                        {chat.active_command.command}
+                      </span>
+                    )}
                   </div>
                 </div>
               </button>
@@ -335,16 +348,35 @@ export default function DashboardPage() {
         {selectedChat ? (
           <>
             <div className="h-[65px] px-4 bg-white border-b flex justify-between items-center shadow-sm">
-              <h2 className="font-bold text-slate-800">{selectedChat.customer_name || 'Чат с клиентом'}</h2>
-              <Button 
+              <div className="flex items-center gap-2 min-w-0">
+                <h2 className="font-bold text-slate-800 truncate">{selectedChat.customer_name || 'Чат с клиентом'}</h2>
+                {selectedChat.active_command && (
+                  <span className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-100 text-purple-600 font-mono shrink-0">
+                    {selectedChat.active_command.command}
+                    <button
+                      onClick={resetActiveCommand}
+                      title="Сбросить команду"
+                      className="ml-0.5 w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-black/10"
+                    ><X size={9} /></button>
+                  </span>
+                )}
+              </div>
+              <Button
                 variant={selectedChat.status === 'bot_processing' ? 'primary' : 'secondary'}
                 size="md"
                 onClick={async () => {
-                  const newStatus = selectedChat.status === 'bot_processing' ? 'operator_needed' : 'bot_processing';
-                  await supabase.from('chats').update({ status: newStatus }).eq('id', selectedChat.id);
-                  setSelectedChat({...selectedChat, status: newStatus});
+                  const turningOff = selectedChat.status === 'bot_processing';
+                  const newStatus = turningOff ? 'operator_needed' : 'bot_processing';
+                  const updates: any = { status: newStatus };
+                  if (turningOff) updates.active_command_id = null;
+                  await supabase.from('chats').update(updates).eq('id', selectedChat.id);
+                  setSelectedChat({
+                    ...selectedChat,
+                    ...updates,
+                    ...(turningOff ? { active_command: null } : {})
+                  });
                 }}
-                className="gap-2"
+                className="gap-2 shrink-0"
               >
                 <Bot size={16} />
                 {selectedChat.status === 'bot_processing' ? 'Бот активен' : 'Включить бота'}
