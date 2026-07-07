@@ -3,19 +3,28 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ botName: string }> }) {
   const { botName } = await params;
-  const { label } = await req.json();
+  const { label, badge } = await req.json();
 
-  if (!label || typeof label !== 'string' || !label.trim()) {
-    return NextResponse.json({ error: 'label is required' }, { status: 400 });
+  if (label !== undefined && (typeof label !== 'string' || !label.trim())) {
+    return NextResponse.json({ error: 'label cannot be empty' }, { status: 400 });
+  }
+  if (label === undefined && badge === undefined) {
+    return NextResponse.json({ error: 'label or badge is required' }, { status: 400 });
   }
 
-  // The AFTER UPDATE trigger on this table (see migration 20240707000005)
-  // propagates the new label into chats.customer_name for any chat that
-  // hasn't had its name manually changed since — updating unconditionally
-  // here is safe because the trigger itself is the conservative part.
+  const payload: Record<string, string | null> = { bot_name: botName };
+  if (label !== undefined) payload.label = label.trim();
+  if (badge !== undefined) payload.badge = typeof badge === 'string' && badge.trim() ? badge.trim() : null;
+
+  // The AFTER UPDATE trigger on wechat_account_labels (see migration
+  // 20240707000005) propagates a renamed label into chats.customer_name for
+  // any chat that hasn't had its name manually changed since — updating
+  // unconditionally here is safe because the trigger itself is the
+  // conservative part. Only columns present in `payload` are touched — the
+  // other field (badge or label) is left as-is when omitted.
   const { error } = await supabaseAdmin
     .from('wechat_account_labels')
-    .upsert({ bot_name: botName, label: label.trim() }, { onConflict: 'bot_name' });
+    .upsert(payload, { onConflict: 'bot_name' });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

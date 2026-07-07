@@ -62,7 +62,14 @@ export default function OrdersPage() {
 
   const updateStatus = async (orderId: string, statusId: string) => {
     const status = statuses.find(s => s.id === statusId);
-    await supabase.from('orders').update({ status_id: statusId }).eq('id', orderId);
+    // Через серверный роут, а не напрямую — там же срабатывают правила
+    // пересылки заказов (см. /dashboard/triggers), которым нужны секреты,
+    // недоступные в браузере.
+    await fetch(`/api/orders/${orderId}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ statusId }),
+    });
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status_id: statusId, order_statuses: status } : o));
     setOpenStatusId(null);
     toast.success('Статус обновлён');

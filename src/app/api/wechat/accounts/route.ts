@@ -18,8 +18,9 @@ export async function GET() {
   const data = await res.json();
   if (!res.ok) return NextResponse.json(data, { status: res.status });
 
-  const { data: labels } = await supabaseAdmin.from('wechat_account_labels').select('bot_name, label');
+  const { data: labels } = await supabaseAdmin.from('wechat_account_labels').select('bot_name, label, badge');
   const labelByBotName = new Map((labels ?? []).map((l) => [l.bot_name, l.label]));
+  const badgeByBotName = new Map((labels ?? []).map((l) => [l.bot_name, l.badge]));
 
   // Most recently active chat per account — powers an "open chat" shortcut
   // straight to the conversation once one has actually started.
@@ -39,6 +40,7 @@ export async function GET() {
   const accounts = (data.accounts ?? []).map((acc: any) => ({
     ...acc,
     label: labelByBotName.get(acc.bot_name) ?? acc.bot_name,
+    badge: badgeByBotName.get(acc.bot_name) ?? null,
     chat_id: latestChatByBotName.get(acc.bot_name) ?? null,
   }));
 
@@ -72,9 +74,10 @@ export async function POST(req: Request) {
 
   if (isNew) {
     const label = typeof body.label === 'string' && body.label.trim() ? body.label.trim() : botName;
+    const badge = typeof body.badge === 'string' && body.badge.trim() ? body.badge.trim() : null;
     await supabaseAdmin
       .from('wechat_account_labels')
-      .upsert({ bot_name: botName, label }, { onConflict: 'bot_name', ignoreDuplicates: true });
+      .upsert({ bot_name: botName, label, badge }, { onConflict: 'bot_name', ignoreDuplicates: true });
   }
 
   return NextResponse.json(data, { status: res.status });

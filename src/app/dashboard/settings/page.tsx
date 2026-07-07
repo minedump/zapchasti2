@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Settings, Plus, Trash2, Palette, Tag, BookOpen, MessageSquare, Save, X, Check } from 'lucide-react';
-import { Button, Input, Skeleton } from '@/components/ui';
+import { Plus, Trash2, Palette, Tag, BookOpen, MessageSquare, Save, X, Check, Tags } from 'lucide-react';
+import { Button, Input, Textarea, Skeleton } from '@/components/ui';
 import { toast, Toaster } from 'react-hot-toast';
 
 export default function SettingsPage() {
@@ -11,6 +11,8 @@ export default function SettingsPage() {
   const [tags, setTags] = useState<any[]>([]);
   const [knowledge, setKnowledge] = useState<any[]>([]);
   const [botPrompt, setBotPrompt] = useState('');
+  const [defaultAssistantBadge, setDefaultAssistantBadge] = useState('');
+  const [systemMessageBadge, setSystemMessageBadge] = useState('');
   const [loading, setLoading] = useState(true);
 
   // inline-add state
@@ -28,22 +30,35 @@ export default function SettingsPage() {
 
   const fetchData = async () => {
     setLoading(true);
-    const [{ data: sData }, { data: tData }, { data: kData }, { data: pData }] = await Promise.all([
+    const [{ data: sData }, { data: tData }, { data: kData }, { data: settingsData }] = await Promise.all([
       supabase.from('order_statuses').select('*').order('created_at'),
       supabase.from('tags').select('*').order('created_at'),
       supabase.from('knowledge_base').select('*').order('created_at', { ascending: false }),
-      supabase.from('bot_settings').select('value').eq('key', 'default_assistant_prompt').single(),
+      supabase.from('bot_settings').select('key, value').in('key', ['default_assistant_prompt', 'default_assistant_badge', 'system_message_badge']),
     ]);
     if (sData) setStatuses(sData);
     if (tData) setTags(tData);
     if (kData) setKnowledge(kData);
-    if (pData) setBotPrompt(pData.value);
+    if (settingsData) {
+      const byKey = new Map(settingsData.map(s => [s.key, s.value]));
+      setBotPrompt(byKey.get('default_assistant_prompt') ?? '');
+      setDefaultAssistantBadge(byKey.get('default_assistant_badge') ?? '');
+      setSystemMessageBadge(byKey.get('system_message_badge') ?? '');
+    }
     setLoading(false);
   };
 
   const savePrompt = async () => {
     await supabase.from('bot_settings').upsert({ key: 'default_assistant_prompt', value: botPrompt });
     toast.success('Промпт сохранен');
+  };
+
+  const saveBadges = async () => {
+    await Promise.all([
+      supabase.from('bot_settings').upsert({ key: 'default_assistant_badge', value: defaultAssistantBadge }),
+      supabase.from('bot_settings').upsert({ key: 'system_message_badge', value: systemMessageBadge }),
+    ]);
+    toast.success('Бейджи сохранены');
   };
 
   const addStatus = async () => {
@@ -133,11 +148,30 @@ export default function SettingsPage() {
           description="Инструкции для бота в режиме ожидания"
           action={<Button onClick={savePrompt} className="gap-2"><Save size={16} /> Сохранить</Button>}
         >
-          <textarea
-            className="w-full min-h-[180px] p-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm leading-relaxed transition-all resize-none"
+          <Textarea
+            className="min-h-[180px] bg-slate-50 focus-visible:bg-white leading-relaxed resize-none"
             value={botPrompt}
             onChange={e => setBotPrompt(e.target.value)}
           />
+        </Section>
+
+        {/* === Бейджи по умолчанию === */}
+        <Section
+          icon={<Tags size={18} />}
+          title="Бейджи по умолчанию"
+          description="Метки на сообщениях без своей команды/аккаунта"
+          action={<Button onClick={saveBadges} className="gap-2"><Save size={16} /> Сохранить</Button>}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase ml-1">Ответы агента по умолчанию</label>
+              <Input value={defaultAssistantBadge} onChange={e => setDefaultAssistantBadge(e.target.value)} placeholder="напр. AI" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase ml-1">Системные сообщения</label>
+              <Input value={systemMessageBadge} onChange={e => setSystemMessageBadge(e.target.value)} placeholder="напр. Система" />
+            </div>
+          </div>
         </Section>
 
         {/* === Статусы заказов === */}
@@ -232,11 +266,11 @@ export default function SettingsPage() {
                 value={newArticleTitle}
                 onChange={e => setNewArticleTitle(e.target.value)}
               />
-              <textarea
+              <Textarea
                 placeholder="Содержание статьи..."
                 value={newArticleContent}
                 onChange={e => setNewArticleContent(e.target.value)}
-                className="w-full min-h-[100px] p-3 rounded-xl border border-blue-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
+                className="min-h-[100px] resize-none"
               />
               <div className="flex gap-2 justify-end">
                 <Button size="sm" variant="secondary" className="gap-1" onClick={() => { setShowAddArticle(false); setNewArticleTitle(''); setNewArticleContent(''); }}>
@@ -261,10 +295,10 @@ export default function SettingsPage() {
                     <Trash2 size={16} />
                   </Button>
                 </div>
-                <textarea
+                <Textarea
                   defaultValue={k.content}
                   onBlur={e => updateKnowledge(k.id, { content: e.target.value })}
-                  className="w-full min-h-[100px] p-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-none"
+                  className="min-h-[100px] resize-none"
                 />
               </div>
             ))}

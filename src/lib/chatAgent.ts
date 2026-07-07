@@ -16,6 +16,11 @@ export function pickAvatarColor(key: string): string {
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
+async function getSetting(key: string): Promise<string | null> {
+  const { data } = await supabaseAdmin.from('bot_settings').select('value').eq('key', key).maybeSingle();
+  return data?.value ?? null;
+}
+
 /**
  * Finds the chat row for this channel + external id, creating it if this is
  * the first message ever seen from it. `matchColumn` is the channel-specific
@@ -68,11 +73,13 @@ export async function findOrCreateChat(opts: {
 // is_from_bot: true + is_ai_generated: false отличает их от настоящих AI-ответов.
 async function sendSystemMessage(dbChatId: string, sender: ChatSender, text: string) {
   await sender.send(text);
+  const badge = await getSetting('system_message_badge');
   await supabaseAdmin.from('messages').insert([{
     chat_id: dbChatId,
     content: text,
     is_from_bot: true,
-    is_ai_generated: false
+    is_ai_generated: false,
+    badge
   }]);
 }
 
@@ -83,7 +90,7 @@ async function sendSystemMessage(dbChatId: string, sender: ChatSender, text: str
 // Используется и при первом ответе на запуск команды, и при последующих репликах —
 // раньше это распознавалось только во втором случае, из-за чего команды, завершающиеся
 // сразу первым сообщением (без сбора данных), зависали с "сырыми" тегами в чате.
-async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: string) {
+async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: string, badge: string | null) {
   const resultMatch = aiResponse.match(/<RESULT>([\s\S]*?)<\/RESULT>/i);
 
   if (!resultMatch) {
@@ -92,7 +99,8 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
       chat_id: chatData.id,
       content: aiResponse,
       is_from_bot: true,
-      is_ai_generated: true
+      is_ai_generated: true,
+      badge
     }]);
     return;
   }
@@ -109,6 +117,7 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
     }
   }
 
+  let createdOrder: any = null;
   if (finalJson) {
     const { data: statusData } = await supabaseAdmin
       .from('order_statuses')
@@ -116,11 +125,12 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
       .eq('name', 'Новый')
       .single();
 
-    await supabaseAdmin.from('orders').insert([{
+    const { data: orderRow } = await supabaseAdmin.from('orders').insert([{
       chat_id: chatData.id,
       data: finalJson,
       status_id: statusData?.id
-    }]);
+    }]).select().maybeSingle();
+    createdOrder = orderRow;
   }
 
   await supabaseAdmin.from('chats').update({
@@ -138,8 +148,31 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
     chat_id: chatData.id,
     content: cleanMessage,
     is_from_bot: true,
-    is_ai_generated: true
+    is_ai_generated: true,
+    badge
   }]);
+
+  if (createdOrder) {
+    const { runForwardRules } = await import('@/lib/orderForwarding');
+    await runForwardRules(createdOrder, createdOrder.status_id);
+  }
+}
+
+async function callDeepSeek(systemPrompt: string, messages: Array<{ role: string; content: string }>): Promise<string> {
+  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [{ role: 'system', content: systemPrompt }, ...messages]
+    })
+  });
+
+  const data = await response.json();
+  return data.choices[0].message.content;
 }
 
 async function askDeepSeek(text: string, history: any[], currentState: any, retryCount: number, promptTemplate: string) {
@@ -150,23 +183,16 @@ async function askDeepSeek(text: string, history: any[], currentState: any, retr
     ПОПЫТКА №${retryCount + 1} ДЛЯ ТЕКУЩЕГО ПУНКТА.
   `;
 
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...history.map(m => ({ role: m.is_from_bot ? 'assistant' : 'user', content: m.content })),
-      ]
-    })
-  });
+  return callDeepSeek(systemPrompt, history.map(m => ({ role: m.is_from_bot ? 'assistant' : 'user', content: m.content })));
+}
 
-  const data = await response.json();
-  return data.choices[0].message.content;
+/**
+ * One-shot prompt run over arbitrary data (no multi-turn history/retry
+ * scaffolding) — used by order-forward rules to transform an order's JSON
+ * before it's sent to the target chat.
+ */
+export async function runPromptOnData(promptTemplate: string, data: unknown): Promise<string> {
+  return callDeepSeek(promptTemplate, [{ role: 'user', content: JSON.stringify(data) }]);
 }
 
 /**
@@ -192,12 +218,16 @@ export async function processIncomingMessage(chatData: any, text: string, sender
       return;
     }
 
-    const { data: commandData } = await supabaseAdmin
+    // Команда ищется среди совпадающих по каналу конкретно + канало-независимых
+    // (channel = null) — если есть обе, канало-специфичная побеждает.
+    const { data: candidates } = await supabaseAdmin
       .from('bot_commands')
       .select('*')
       .eq('command', text)
       .eq('is_active', true)
-      .maybeSingle();
+      .or(`channel.is.null,channel.eq.${chatData.channel}`);
+
+    const commandData = candidates?.find(c => c.channel === chatData.channel) ?? candidates?.find(c => !c.channel);
 
     if (commandData) {
       await supabaseAdmin.from('chats').update({
@@ -218,7 +248,7 @@ export async function processIncomingMessage(chatData: any, text: string, sender
         commandData.prompt_template
       );
 
-      await finishCommandTurn(chatData, sender, aiResponse);
+      await finishCommandTurn(chatData, sender, aiResponse, commandData.badge ?? null);
       return;
     }
   }
@@ -227,25 +257,29 @@ export async function processIncomingMessage(chatData: any, text: string, sender
   if (chatData.status === 'bot_processing') {
     const metadata = chatData.ai_metadata || {};
     let currentPrompt: string | undefined;
+    let badge: string | null = null;
 
-    // Если есть активная команда, промпт берём из bot_commands напрямую —
+    // Если есть активная команда, промпт и бейдж берём из bot_commands напрямую —
     // так изменения в разделе "Команды AI" применяются сразу, а не только к новым опросам
     if (chatData.active_command_id) {
       const { data: activeCommand } = await supabaseAdmin
         .from('bot_commands')
-        .select('prompt_template')
+        .select('prompt_template, badge')
         .eq('id', chatData.active_command_id)
         .maybeSingle();
       currentPrompt = activeCommand?.prompt_template;
+      badge = activeCommand?.badge ?? null;
     }
 
     // Если промпта нет (дефолтный режим или команда была удалена), берем его из настроек и добавляем знания
     if (!currentPrompt) {
       const { data: settings } = await supabaseAdmin
         .from('bot_settings')
-        .select('value')
-        .eq('key', 'default_assistant_prompt')
-        .single();
+        .select('key, value')
+        .in('key', ['default_assistant_prompt', 'default_assistant_badge']);
+
+      const settingsByKey = new Map((settings ?? []).map(s => [s.key, s.value]));
+      badge = settingsByKey.get('default_assistant_badge') ?? null;
 
       const { data: knowledge } = await supabaseAdmin
         .from('knowledge_base')
@@ -255,7 +289,7 @@ export async function processIncomingMessage(chatData: any, text: string, sender
       const knowledgeContext = knowledge?.map(k => `СТАТЬЯ: ${k.title}\n${k.content}`).join('\n\n') || '';
 
       currentPrompt = `
-        ${settings?.value || "Ты помощник."}
+        ${settingsByKey.get('default_assistant_prompt') || "Ты помощник."}
 
         БАЗА ЗНАНИЙ КОМПАНИИ:
         ${knowledgeContext}
@@ -276,6 +310,6 @@ export async function processIncomingMessage(chatData: any, text: string, sender
       currentPrompt
     );
 
-    await finishCommandTurn(chatData, sender, aiResponse);
+    await finishCommandTurn(chatData, sender, aiResponse, badge);
   }
 }

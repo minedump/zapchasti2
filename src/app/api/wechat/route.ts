@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { findOrCreateChat, processIncomingMessage, type ChatSender } from '@/lib/chatAgent';
+import { findOrCreateChat, processIncomingMessage } from '@/lib/chatAgent';
+import { wechatSender } from '@/lib/channelSenders';
 import { supabaseAdmin } from '@/lib/supabase';
 
 const GATEWAY_URL = process.env.WECHAT_GATEWAY_URL;
@@ -13,18 +14,6 @@ function verifySignature(rawBody: string, signature: string | null): boolean {
   const a = Buffer.from(expected);
   const b = Buffer.from(signature);
   return a.length === b.length && timingSafeEqual(a, b);
-}
-
-function wechatSender(botName: string, userId: string): ChatSender {
-  return {
-    send: async (text: string) => {
-      await fetch(`${GATEWAY_URL}/v1/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${GATEWAY_API_KEY}` },
-        body: JSON.stringify({ bot_name: botName, user_id: userId, content: text }),
-      });
-    },
-  };
 }
 
 export async function POST(req: Request) {

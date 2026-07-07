@@ -1,19 +1,6 @@
 import { NextResponse } from 'next/server';
-import { findOrCreateChat, processIncomingMessage, type ChatSender } from '@/lib/chatAgent';
-
-const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-
-async function sendTelegramMessage(chatId: number, text: string) {
-  await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text }),
-  });
-}
-
-function telegramSender(chatId: number): ChatSender {
-  return { send: (text) => sendTelegramMessage(chatId, text) };
-}
+import { findOrCreateChat, processIncomingMessage } from '@/lib/chatAgent';
+import { telegramSender } from '@/lib/channelSenders';
 
 export async function POST(req: Request) {
   let body;

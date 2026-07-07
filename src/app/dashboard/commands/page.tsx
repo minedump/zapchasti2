@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Plus, Save, Trash2, Edit3, X, AlertCircle, CheckCircle2, HelpCircle, ChevronDown } from 'lucide-react';
-import { Button, Input, Skeleton } from '@/components/ui';
+import { Button, Input, Select, Textarea, Skeleton } from '@/components/ui';
 import { toast, Toaster } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
@@ -27,7 +27,7 @@ export default function CommandsPage() {
 
   const handleAdd = () => {
     const newId = 'new-' + Date.now();
-    const newCmd = { id: newId, command: '', description: '', prompt_template: '', is_active: true, isNew: true };
+    const newCmd = { id: newId, command: '', description: '', prompt_template: '', channel: null, badge: '', is_active: true, isNew: true };
     setCommands([newCmd, ...commands]);
     setEditingId(newId);
     setEditForm(newCmd);
@@ -35,24 +35,30 @@ export default function CommandsPage() {
 
   const handleEdit = (cmd: any) => {
     setEditingId(cmd.id);
-    setEditForm({ ...cmd });
+    setEditForm({ ...cmd, channel: cmd.channel ?? '', badge: cmd.badge ?? '' });
   };
 
   const handleSave = async () => {
-    if (!editForm.command.startsWith('/')) {
+    const command = editForm.command.trim();
+    if (command && !command.startsWith('/')) {
       toast.error('Команда должна начинаться с /');
       return;
     }
 
-    // Валидация на дубликаты
-    const isDuplicate = commands.some(c => c.command === editForm.command && c.id !== editForm.id);
+    // Валидация на дубликаты — в рамках одного канала (или "любой")
+    const isDuplicate = command && commands.some(c =>
+      c.command === command && c.id !== editForm.id && (c.channel ?? '') === (editForm.channel ?? '')
+    );
     if (isDuplicate) {
-      toast.error('Такая команда уже существует');
+      toast.error('Такая команда для этого канала уже существует');
       return;
     }
 
     const { isNew, ...payload } = editForm;
-    
+    payload.command = command || null;
+    payload.channel = editForm.channel || null;
+    payload.badge = editForm.badge?.trim() || null;
+
     let result;
     if (isNew) {
       const { id, ...insertData } = payload;
@@ -178,26 +184,44 @@ export default function CommandsPage() {
                 <div className="p-6 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-500 uppercase ml-1">Команда</label>
-                      <Input 
-                        value={editForm.command} 
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-1">Команда (необязательно)</label>
+                      <Input
+                        value={editForm.command}
                         onChange={e => setEditForm({...editForm, command: e.target.value})}
-                        placeholder="/start"
+                        placeholder="/start — оставьте пустым для промпта только для пересылки"
                       />
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase ml-1">Описание</label>
-                      <Input 
-                        value={editForm.description} 
+                      <Input
+                        value={editForm.description}
                         onChange={e => setEditForm({...editForm, description: e.target.value})}
                         placeholder="Сбор данных о запчастях"
                       />
                     </div>
                   </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-1">Канал</label>
+                      <Select value={editForm.channel ?? ''} onChange={e => setEditForm({ ...editForm, channel: e.target.value || null })}>
+                        <option value="">Любой</option>
+                        <option value="telegram">Telegram</option>
+                        <option value="wechat">WeChat</option>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase ml-1">Бейдж на сообщениях</label>
+                      <Input
+                        value={editForm.badge ?? ''}
+                        onChange={e => setEditForm({ ...editForm, badge: e.target.value })}
+                        placeholder="напр. Продажи"
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 uppercase ml-1">Промпт (Инструкции для AI)</label>
-                    <textarea 
-                      className="w-full min-h-[200px] p-4 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none text-sm leading-relaxed transition-all"
+                    <Textarea
+                      className="min-h-[200px] bg-slate-50 focus-visible:bg-white leading-relaxed"
                       value={editForm.prompt_template}
                       onChange={e => setEditForm({...editForm, prompt_template: e.target.value})}
                       placeholder="Напишите инструкции..."
@@ -213,10 +237,26 @@ export default function CommandsPage() {
               ) : (
                 <div className="p-6">
                   <div className="flex items-start justify-between mb-4">
-                    <div className="flex flex-col md:flex-row md:items-center gap-3">
-                      <span className="w-fit px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-bold font-mono">
-                        {cmd.command || '/...'}
-                      </span>
+                    <div className="flex flex-col md:flex-row md:items-center gap-2 flex-wrap">
+                      {cmd.command ? (
+                        <span className="w-fit px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-bold font-mono">
+                          {cmd.command}
+                        </span>
+                      ) : (
+                        <span className="w-fit px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs font-bold uppercase">
+                          только для пересылки
+                        </span>
+                      )}
+                      {cmd.channel && (
+                        <span className="w-fit px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold uppercase">
+                          {cmd.channel}
+                        </span>
+                      )}
+                      {cmd.badge && (
+                        <span className="w-fit px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-[10px] font-bold uppercase">
+                          {cmd.badge}
+                        </span>
+                      )}
                       <h3 className="font-semibold text-slate-800">{cmd.description || 'Без описания'}</h3>
                     </div>
                     <div className="flex gap-2">

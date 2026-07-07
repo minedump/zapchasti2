@@ -14,6 +14,7 @@ type AccountStatus = 'pending_qr' | 'scanned' | 'logged_in' | 'expired' | 'error
 interface Account {
   bot_name: string;
   label: string;
+  badge?: string | null;
   status: AccountStatus;
   qr_url?: string;
   error?: string;
@@ -51,6 +52,7 @@ export default function WeChatPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [newLabel, setNewLabel] = useState('');
+  const [newBadge, setNewBadge] = useState('');
   const [creating, setCreating] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const qrCanvasCache = useRef<Record<string, string>>({});
@@ -58,6 +60,7 @@ export default function WeChatPage() {
   const [copiedFor, setCopiedFor] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
   const [labelDraft, setLabelDraft] = useState('');
+  const [badgeDraft, setBadgeDraft] = useState('');
   const [savingLabel, setSavingLabel] = useState(false);
 
   const fetchAccounts = useCallback(async () => {
@@ -106,7 +109,7 @@ export default function WeChatPage() {
       const res = await fetch('/api/wechat/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label }),
+        body: JSON.stringify({ label, badge: newBadge.trim() || undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -115,6 +118,7 @@ export default function WeChatPage() {
       }
       toast.success('Аккаунт создан, ждём QR-код');
       setNewLabel('');
+      setNewBadge('');
       setShowAdd(false);
       await fetchAccounts();
     } catch {
@@ -143,6 +147,7 @@ export default function WeChatPage() {
   const startEditLabel = (acc: Account) => {
     setEditingLabel(acc.bot_name);
     setLabelDraft(acc.label);
+    setBadgeDraft(acc.badge ?? '');
   };
 
   const saveLabel = async (botName: string) => {
@@ -154,7 +159,7 @@ export default function WeChatPage() {
       const res = await fetch(`/api/wechat/accounts/${encodeURIComponent(botName)}/label`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ label }),
+        body: JSON.stringify({ label, badge: badgeDraft.trim() || null }),
       });
       if (!res.ok) {
         const data = await res.json();
@@ -204,6 +209,13 @@ export default function WeChatPage() {
               className="flex-1 bg-white"
               autoFocus
             />
+            <Input
+              placeholder="Бейдж на сообщениях (необязательно)"
+              value={newBadge}
+              onChange={(e) => setNewBadge(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && createAccount()}
+              className="flex-1 bg-white"
+            />
             <Button onClick={createAccount} disabled={creating} className="gap-2 shrink-0">
               {creating ? 'Создаём…' : 'Создать'}
             </Button>
@@ -237,8 +249,15 @@ export default function WeChatPage() {
                             value={labelDraft}
                             onChange={(e) => setLabelDraft(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && saveLabel(acc.bot_name)}
-                            className="h-8 py-1 text-sm"
+                            className="h-8 py-1 text-sm w-40"
                             autoFocus
+                          />
+                          <Input
+                            placeholder="Бейдж"
+                            value={badgeDraft}
+                            onChange={(e) => setBadgeDraft(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && saveLabel(acc.bot_name)}
+                            className="h-8 py-1 text-sm w-32"
                           />
                           <Button size="sm" className="p-1.5" disabled={savingLabel} onClick={() => saveLabel(acc.bot_name)}>
                             <Check size={14} />
@@ -250,6 +269,11 @@ export default function WeChatPage() {
                       ) : (
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-slate-800">{acc.label}</span>
+                          {acc.badge && (
+                            <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[10px] font-bold uppercase">
+                              {acc.badge}
+                            </span>
+                          )}
                           <button onClick={() => startEditLabel(acc)} className="text-slate-300 hover:text-slate-500 cursor-pointer">
                             <Pencil size={13} />
                           </button>

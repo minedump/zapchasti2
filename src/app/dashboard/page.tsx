@@ -216,7 +216,14 @@ export default function DashboardPage() {
 
   const updateOrderStatus = async (orderId: string, statusId: string) => {
     const status = statuses.find(s => s.id === statusId);
-    await supabase.from('orders').update({ status_id: statusId }).eq('id', orderId);
+    // Через серверный роут, а не напрямую — там же срабатывают правила
+    // пересылки заказов (см. /dashboard/triggers), которым нужны секреты,
+    // недоступные в браузере.
+    await fetch(`/api/orders/${orderId}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ statusId }),
+    });
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status_id: statusId, order_statuses: status } : o));
     setOpenStatusDropdown(null);
     toast.success('Статус обновлён');
@@ -235,13 +242,26 @@ export default function DashboardPage() {
     if (!newMessage.trim() || !selectedChat) return;
 
     const { data: { user } } = await supabase.auth.getUser();
-    
+
+    // Сообщения оператора через WeChat помечаются бейджем того аккаунта,
+    // через который отвечаем — задаётся в разделе WeChat при подключении.
+    let badge: string | null = null;
+    if (selectedChat.channel === 'wechat' && selectedChat.wechat_bot_name) {
+      const { data: labelRow } = await supabase
+        .from('wechat_account_labels')
+        .select('badge')
+        .eq('bot_name', selectedChat.wechat_bot_name)
+        .maybeSingle();
+      badge = labelRow?.badge ?? null;
+    }
+
     // 1. Сохраняем в базу
     const { error } = await supabase.from('messages').insert([{
       chat_id: selectedChat.id,
       content: newMessage,
       sender_id: user?.id,
-      is_from_bot: false
+      is_from_bot: false,
+      badge
     }]);
 
     if (!error) {
@@ -430,7 +450,7 @@ export default function DashboardPage() {
                       <p className="text-sm">{msg.content}</p>
                       <span className="text-[10px] opacity-50 mt-1 block text-right">
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        {msg.is_from_bot && (msg.is_ai_generated ? ' • AI' : ' • Система')}
+                        {msg.badge ? ` • ${msg.badge}` : msg.is_from_bot && (msg.is_ai_generated ? ' • AI' : ' • Система')}
                       </span>
                     </div>
                   </div>
