@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# wechat-worker lives in its own separate git repository
+/wechat-worker/

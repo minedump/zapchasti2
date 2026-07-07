@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
-import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, X } from 'lucide-react';
+import { Search, Send, Bot, ShoppingBag, User, MessageSquare, MessageCircle, ChevronDown, Plus, X } from 'lucide-react';
 
 // Telegram plane SVG (lucide doesn't have it)
 const TelegramIcon = ({ size = 12 }: { size?: number }) => (
@@ -250,16 +250,28 @@ export default function DashboardPage() {
     }]);
 
     if (!error) {
-      // 2. Отправляем в Telegram через наш API
-      await fetch('/api/telegram/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chatId: selectedChat.telegram_chat_id,
-          text: newMessage
-        })
-      });
-      
+      // 2. Отправляем через нужный канал
+      if (selectedChat.channel === 'wechat') {
+        await fetch('/api/wechat/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            botName: selectedChat.wechat_bot_name,
+            userId: selectedChat.wechat_user_id,
+            text: newMessage
+          })
+        });
+      } else {
+        await fetch('/api/telegram/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chatId: selectedChat.telegram_chat_id,
+            text: newMessage
+          })
+        });
+      }
+
       // 3. Если оператор ответил, переводим чат в статус 'operator_needed' (или оставляем)
       // и снимаем активную команду — раз оператор вмешался, опрос дальше не ведётся
       if (selectedChat.status === 'bot_processing') {
@@ -327,9 +339,15 @@ export default function DashboardPage() {
                         <><User size={12} /> Оператор</>
                       )}
                     </span>
-                    <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-sky-100 text-sky-500">
-                      <TelegramIcon size={11} /> TG
-                    </span>
+                    {chat.channel === 'wechat' ? (
+                      <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-emerald-100 text-emerald-600">
+                        <MessageCircle size={11} /> WeChat
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-sky-100 text-sky-500">
+                        <TelegramIcon size={11} /> TG
+                      </span>
+                    )}
                     {chat.active_command && (
                       <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-slate-200 text-slate-600 font-mono">
                         {chat.active_command.command}

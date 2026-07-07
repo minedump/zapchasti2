@@ -1,0 +1,244 @@
+'use client';
+
+import { useEffect, useState, useCallback, useRef } from 'react';
+import QRCode from 'qrcode';
+import { Plus, RefreshCw, Copy, Check, AlertCircle, MessageCircle } from 'lucide-react';
+import { Button, Input, Skeleton } from '@/components/ui';
+import { toast, Toaster } from 'react-hot-toast';
+import { cn } from '@/lib/utils';
+
+type AccountStatus = 'pending_qr' | 'scanned' | 'logged_in' | 'expired' | 'error' | 'not_started';
+
+interface Account {
+  bot_name: string;
+  status: AccountStatus;
+  qr_url?: string;
+  error?: string;
+  error_at?: string;
+  fatal_error?: string;
+  fatal_error_at?: string;
+  last_message_at?: string;
+}
+
+const STATUS_LABELS: Record<AccountStatus, { label: string; className: string }> = {
+  not_started: { label: 'Не запущен', className: 'bg-slate-100 text-slate-500' },
+  pending_qr: { label: 'Ждём сканирования', className: 'bg-amber-100 text-amber-700' },
+  scanned: { label: 'Отсканирован', className: 'bg-blue-100 text-blue-700' },
+  logged_in: { label: 'Подключён', className: 'bg-emerald-100 text-emerald-700' },
+  expired: { label: 'QR истёк', className: 'bg-slate-100 text-slate-500' },
+  error: { label: 'Ошибка', className: 'bg-red-100 text-red-600' },
+};
+
+export default function WeChatPage() {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newBotName, setNewBotName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const qrCanvasCache = useRef<Record<string, string>>({});
+  const [qrImages, setQrImages] = useState<Record<string, string>>({});
+  const [copiedFor, setCopiedFor] = useState<string | null>(null);
+
+  const fetchAccounts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/wechat/accounts');
+      const data = await res.json();
+      if (res.ok) setAccounts(data.accounts || []);
+    } catch {
+      // network hiccup — keep showing the last known state
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAccounts();
+    const interval = setInterval(fetchAccounts, 4000);
+    return () => clearInterval(interval);
+  }, [fetchAccounts]);
+
+  // Render QR images for any account currently showing a scannable code
+  useEffect(() => {
+    accounts.forEach((acc) => {
+      if (acc.qr_url && (acc.status === 'pending_qr' || acc.status === 'scanned') && qrCanvasCache.current[acc.qr_url] === undefined) {
+        qrCanvasCache.current[acc.qr_url] = 'pending';
+        QRCode.toDataURL(acc.qr_url, { width: 220, margin: 1 })
+          .then((dataUrl) => {
+            qrCanvasCache.current[acc.qr_url!] = dataUrl;
+            setQrImages((prev) => ({ ...prev, [acc.qr_url!]: dataUrl }));
+          })
+          .catch(() => {});
+      }
+    });
+  }, [accounts]);
+
+  const createAccount = async () => {
+    const botName = newBotName.trim();
+    if (!botName) return;
+    if (accounts.some((a) => a.bot_name === botName)) {
+      toast.error('Такой аккаунт уже есть');
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const res = await fetch('/api/wechat/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bot_name: botName }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Ошибка создания');
+        return;
+      }
+      toast.success('Аккаунт создан, ждём QR-код');
+      setNewBotName('');
+      setShowAdd(false);
+      await fetchAccounts();
+    } catch {
+      toast.error('Не удалось связаться со шлюзом');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const retryAccount = async (botName: string) => {
+    try {
+      const res = await fetch('/api/wechat/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bot_name: botName }),
+      });
+      if (res.ok) {
+        toast.success('Повторная попытка запущена');
+        await fetchAccounts();
+      }
+    } catch {
+      toast.error('Не удалось связаться со шлюзом');
+    }
+  };
+
+  const copyLink = async (url: string, botName: string) => {
+    await navigator.clipboard.writeText(url);
+    setCopiedFor(botName);
+    setTimeout(() => setCopiedFor(null), 1500);
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto flex flex-col">
+      <div className="p-8 max-w-5xl mx-auto w-full flex-1">
+        <Toaster position="top-right" />
+
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+              <MessageCircle className="text-emerald-600" size={28} />
+              WeChat
+            </h1>
+            <p className="text-slate-500 mt-1">Аккаунты для приёма и отправки сообщений в WeChat</p>
+          </div>
+          <Button onClick={() => setShowAdd((v) => !v)} className="gap-2">
+            <Plus size={18} /> Подключить аккаунт
+          </Button>
+        </div>
+
+        {showAdd && (
+          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2">
+            <Input
+              placeholder="Название аккаунта, например sales-1"
+              value={newBotName}
+              onChange={(e) => setNewBotName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && createAccount()}
+              className="flex-1 bg-white"
+              autoFocus
+            />
+            <Button onClick={createAccount} disabled={creating} className="gap-2 shrink-0">
+              {creating ? 'Создаём…' : 'Создать'}
+            </Button>
+          </div>
+        )}
+
+        <div className="grid gap-6">
+          {loading ? (
+            [1, 2].map((i) => <Skeleton key={i} className="h-48 w-full" />)
+          ) : accounts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-4 bg-white rounded-2xl border border-slate-200">
+              <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">
+                <MessageCircle size={28} className="text-slate-300" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium text-slate-400">Аккаунтов пока нет</p>
+                <p className="text-xs text-slate-300 mt-1">Нажмите «Подключить аккаунт», чтобы получить QR для входа</p>
+              </div>
+            </div>
+          ) : (
+            accounts.map((acc) => {
+              const statusInfo = STATUS_LABELS[acc.status] ?? STATUS_LABELS.not_started;
+              const showQr = acc.qr_url && (acc.status === 'pending_qr' || acc.status === 'scanned');
+              return (
+                <div key={acc.bot_name} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <span className="font-mono font-bold text-slate-800">{acc.bot_name}</span>
+                      <span className={cn('ml-3 px-2.5 py-1 rounded-full text-xs font-bold uppercase', statusInfo.className)}>
+                        {statusInfo.label}
+                      </span>
+                    </div>
+                    {(acc.status === 'error' || acc.status === 'expired' || acc.status === 'not_started') && (
+                      <Button variant="secondary" size="sm" className="gap-2" onClick={() => retryAccount(acc.bot_name)}>
+                        <RefreshCw size={14} /> Повторить
+                      </Button>
+                    )}
+                  </div>
+
+                  {showQr && (
+                    <div className="flex items-start gap-4 mb-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                      {qrImages[acc.qr_url!] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={qrImages[acc.qr_url!]} alt="QR для входа" className="rounded-lg border border-slate-200" width={160} height={160} />
+                      ) : (
+                        <Skeleton className="w-40 h-40 rounded-lg" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-slate-600 mb-2">
+                          Отсканируйте этим QR-кодом в WeChat тем аккаунтом, который должен отвечать клиентам.
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <code className="flex-1 text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 truncate">
+                            {acc.qr_url}
+                          </code>
+                          <Button variant="secondary" size="sm" className="p-2 shrink-0" onClick={() => copyLink(acc.qr_url!, acc.bot_name)}>
+                            {copiedFor === acc.bot_name ? <Check size={14} /> : <Copy size={14} />}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {(acc.fatal_error || acc.error) && (
+                    <div className="flex items-start gap-2 text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
+                      <AlertCircle size={14} className="shrink-0 mt-0.5 text-slate-400" />
+                      <span className="break-all">
+                        {acc.fatal_error ? `Критическая ошибка: ${acc.fatal_error}` : `Последняя ошибка поллинга: ${acc.error}`}
+                      </span>
+                    </div>
+                  )}
+
+                  {acc.last_message_at && (
+                    <p className="text-xs text-slate-400 mt-2">
+                      Последнее сообщение: {new Date(acc.last_message_at).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+      <footer className="shrink-0 border-t border-slate-200 bg-white px-8 py-3 text-center text-xs text-slate-400">
+        &copy; {new Date().getFullYear()} PromptFlow &mdash; CRM для Telegram и WeChat
+      </footer>
+    </div>
+  );
+}

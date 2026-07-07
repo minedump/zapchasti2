@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
-import { MessageSquare, Settings, LogOut, Bot, ShoppingBag } from 'lucide-react';
+import { MessageSquare, Settings, LogOut, Bot, ShoppingBag, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -39,6 +39,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <NavItem href="/dashboard" icon={<MessageSquare size={20} />} label="Чаты" active={pathname === '/dashboard'} />
           <NavItem href="/dashboard/orders" icon={<ShoppingBag size={20} />} label="Заказы" active={pathname.startsWith('/dashboard/orders')} />
           <NavItem href="/dashboard/commands" icon={<Bot size={20} />} label="Команды AI" active={pathname.startsWith('/dashboard/commands')} />
+          <NavItem href="/dashboard/wechat" icon={<MessageCircle size={20} />} label="WeChat" active={pathname.startsWith('/dashboard/wechat')} />
           <NavItem href="/dashboard/settings" icon={<Settings size={20} />} label="Настройки" active={pathname.startsWith('/dashboard/settings')} />
         </nav>
         <div className="p-4 border-t border-slate-800">
