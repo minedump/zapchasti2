@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
-import { Plus, RefreshCw, Copy, Check, AlertCircle, MessageSquare, Pencil, X } from 'lucide-react';
+import { Plus, RefreshCw, Copy, Check, AlertCircle, MessageSquare, Edit3, Trash2, X } from 'lucide-react';
 import { WeChatIcon } from '@/components/icons';
 import { Button, Input, Skeleton } from '@/components/ui';
 import { toast, Toaster } from 'react-hot-toast';
@@ -176,6 +176,23 @@ export default function WeChatPage() {
     }
   };
 
+  const deleteAccount = async (botName: string, label: string) => {
+    if (!confirm(`Удалить аккаунт «${label}»? Все связанные чаты, сообщения и заказы будут удалены безвозвратно. Сама сессия WeChat на шлюзе не тронется.`)) return;
+
+    try {
+      const res = await fetch(`/api/wechat/accounts/${encodeURIComponent(botName)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Не удалось удалить');
+        return;
+      }
+      toast.success('Аккаунт удалён');
+      await fetchAccounts();
+    } catch {
+      toast.error('Не удалось связаться с сервером');
+    }
+  };
+
   const copyLink = async (url: string, botName: string) => {
     await navigator.clipboard.writeText(url);
     setCopiedFor(botName);
@@ -274,9 +291,6 @@ export default function WeChatPage() {
                               {acc.badge}
                             </span>
                           )}
-                          <button onClick={() => startEditLabel(acc)} className="text-slate-300 hover:text-slate-500 cursor-pointer">
-                            <Pencil size={13} />
-                          </button>
                         </div>
                       )}
                       <div className="flex items-center gap-2 mt-1">
@@ -296,6 +310,14 @@ export default function WeChatPage() {
                           <RefreshCw size={14} /> Повторить
                         </Button>
                       )}
+                      {editingLabel !== acc.bot_name && (
+                        <Button variant="secondary" size="sm" className="gap-2" onClick={() => startEditLabel(acc)}>
+                          <Edit3 size={14} /> Редактировать
+                        </Button>
+                      )}
+                      <Button variant="danger" size="sm" className="p-2" onClick={() => deleteAccount(acc.bot_name, acc.label)}>
+                        <Trash2 size={14} />
+                      </Button>
                     </div>
                   </div>
 
