@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
-import { Plus, RefreshCw, Copy, Check, AlertCircle, Pencil, X } from 'lucide-react';
+import { Plus, RefreshCw, Copy, Check, AlertCircle, MessageSquare, Pencil, X } from 'lucide-react';
 import { WeChatIcon } from '@/components/icons';
 import { Button, Input, Skeleton } from '@/components/ui';
 import { toast, Toaster } from 'react-hot-toast';
@@ -20,6 +21,7 @@ interface Account {
   fatal_error?: string;
   fatal_error_at?: string;
   last_message_at?: string;
+  chat_id?: string | null;
 }
 
 // Транзиентные ошибки поллинга (acc.error/error_at) — фоновый шум, не показываем
@@ -45,6 +47,7 @@ const STATUS_LABELS: Record<AccountStatus, { label: string; className: string }>
 };
 
 export default function WeChatPage() {
+  const router = useRouter();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [newLabel, setNewLabel] = useState('');
@@ -182,7 +185,6 @@ export default function WeChatPage() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-              <WeChatIcon className="text-emerald-600" size={28} />
               WeChat
             </h1>
             <p className="text-slate-500 mt-1">Аккаунты для приёма и отправки сообщений в WeChat</p>
@@ -259,11 +261,18 @@ export default function WeChatPage() {
                         </span>
                       </div>
                     </div>
-                    {(acc.status === 'error' || acc.status === 'expired' || acc.status === 'not_started') && (
-                      <Button variant="secondary" size="sm" className="gap-2" onClick={() => retryAccount(acc.bot_name)}>
-                        <RefreshCw size={14} /> Повторить
-                      </Button>
-                    )}
+                    <div className="flex gap-2 shrink-0">
+                      {acc.chat_id && (
+                        <Button variant="secondary" size="sm" className="gap-2" onClick={() => router.push(`/dashboard?chatId=${acc.chat_id}`)}>
+                          <MessageSquare size={14} /> Открыть чат
+                        </Button>
+                      )}
+                      {(acc.status === 'error' || acc.status === 'expired' || acc.status === 'not_started') && (
+                        <Button variant="secondary" size="sm" className="gap-2" onClick={() => retryAccount(acc.bot_name)}>
+                          <RefreshCw size={14} /> Повторить
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   {showQr && (

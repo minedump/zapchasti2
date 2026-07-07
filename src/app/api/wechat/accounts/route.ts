@@ -21,9 +21,25 @@ export async function GET() {
   const { data: labels } = await supabaseAdmin.from('wechat_account_labels').select('bot_name, label');
   const labelByBotName = new Map((labels ?? []).map((l) => [l.bot_name, l.label]));
 
+  // Most recently active chat per account — powers an "open chat" shortcut
+  // straight to the conversation once one has actually started.
+  const { data: chats } = await supabaseAdmin
+    .from('chats')
+    .select('id, wechat_bot_name, last_message_at')
+    .eq('channel', 'wechat')
+    .order('last_message_at', { ascending: false });
+
+  const latestChatByBotName = new Map<string, string>();
+  for (const chat of chats ?? []) {
+    if (chat.wechat_bot_name && !latestChatByBotName.has(chat.wechat_bot_name)) {
+      latestChatByBotName.set(chat.wechat_bot_name, chat.id);
+    }
+  }
+
   const accounts = (data.accounts ?? []).map((acc: any) => ({
     ...acc,
     label: labelByBotName.get(acc.bot_name) ?? acc.bot_name,
+    chat_id: latestChatByBotName.get(acc.bot_name) ?? null,
   }));
 
   return NextResponse.json({ accounts });
