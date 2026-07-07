@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { MessageSquare, Settings, LogOut, Bot, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,10 +36,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <span className="tracking-widest uppercase text-sm">PromptFlow</span>
         </div>
         <nav className="flex-1 p-4 space-y-2">
-          <NavItem href="/dashboard" icon={<MessageSquare size={20} />} label="Чаты" />
-          <NavItem href="/dashboard/orders" icon={<ShoppingBag size={20} />} label="Заказы" />
-          <NavItem href="/dashboard/commands" icon={<Bot size={20} />} label="Команды AI" />
-          <NavItem href="/dashboard/settings" icon={<Settings size={20} />} label="Настройки" />
+          <NavItem href="/dashboard" icon={<MessageSquare size={20} />} label="Чаты" active={pathname === '/dashboard'} />
+          <NavItem href="/dashboard/orders" icon={<ShoppingBag size={20} />} label="Заказы" active={pathname.startsWith('/dashboard/orders')} />
+          <NavItem href="/dashboard/commands" icon={<Bot size={20} />} label="Команды AI" active={pathname.startsWith('/dashboard/commands')} />
+          <NavItem href="/dashboard/settings" icon={<Settings size={20} />} label="Настройки" active={pathname.startsWith('/dashboard/settings')} />
         </nav>
         <div className="p-4 border-t border-slate-800">
           <Button
@@ -59,11 +60,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 }
 
-function NavItem({ href, icon, label }: { href: string, icon: React.ReactNode, label: string }) {
+function NavItem({ href, icon, label, active }: { href: string, icon: React.ReactNode, label: string, active?: boolean }) {
   return (
-    <a 
-      href={href} 
-      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800 text-slate-300 hover:text-white transition-all"
+    <a
+      href={href}
+      className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
+        active
+          ? 'bg-blue-600 text-white'
+          : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+      }`}
     >
       {icon} {label}
     </a>
