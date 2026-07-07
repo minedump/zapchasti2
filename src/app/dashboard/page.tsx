@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
-import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Tag, X } from 'lucide-react';
+import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, X } from 'lucide-react';
 
 // Telegram plane SVG (lucide doesn't have it)
 const TelegramIcon = ({ size = 12 }: { size?: number }) => (
@@ -28,6 +28,7 @@ export default function DashboardPage() {
   const [statuses, setStatuses] = useState<any[]>([]);
   const [tags, setTags] = useState<any[]>([]);
   const [openStatusDropdown, setOpenStatusDropdown] = useState<string | null>(null);
+  const [openTagDropdown, setOpenTagDropdown] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -61,11 +62,17 @@ export default function DashboardPage() {
     return () => { supabase.removeChannel(chatChannel); };
   }, []);
 
-  // Close status dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
-    const handler = () => setOpenStatusDropdown(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
+    const handler = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest('[data-dropdown]')) {
+        setOpenStatusDropdown(null);
+        setOpenTagDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   const fetchStatuses = async () => {
@@ -431,9 +438,9 @@ export default function DashboardPage() {
                     #{order.order_number}
                   </span>
                   {/* Status dropdown */}
-                  <div className="relative">
+                  <div className="relative" data-dropdown>
                     <button
-                      onClick={(e) => { e.stopPropagation(); setOpenStatusDropdown(openStatusDropdown === order.id ? null : order.id); }}
+                      onMouseDown={(e) => { e.stopPropagation(); setOpenStatusDropdown(openStatusDropdown === order.id ? null : order.id); }}
                       className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase cursor-pointer transition-all hover:opacity-80"
                       style={order.order_statuses
                         ? { backgroundColor: order.order_statuses.color + '20', color: order.order_statuses.color }
@@ -451,7 +458,7 @@ export default function DashboardPage() {
                         {statuses.map(s => (
                           <button
                             key={s.id}
-                            onClick={(e) => { e.stopPropagation(); updateOrderStatus(order.id, s.id); }}
+                            onMouseDown={(e) => { e.stopPropagation(); updateOrderStatus(order.id, s.id); }}
                             className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors"
                           >
                             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
@@ -473,38 +480,53 @@ export default function DashboardPage() {
                   ))}
                 </div>
 
-                {/* Tags */}
-                {tags.length > 0 && (
-                  <div className="pt-3 border-t border-slate-100">
-                    <div className="flex items-center gap-1 mb-2">
-                      <Tag size={11} className="text-slate-400" />
-                      <span className="text-[9px] text-slate-400 uppercase font-bold">Метки</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {tags.map(tag => {
-                        const active = orderTagIds.has(tag.id);
-                        return (
-                          <button
-                            key={tag.id}
-                            onClick={() => toggleOrderTag(order.id, tag.id, active)}
-                            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-all"
-                            style={active
-                              ? { backgroundColor: tag.color + '25', color: tag.color, outline: `1.5px solid ${tag.color}50` }
-                              : { backgroundColor: '#f1f5f9', color: '#94a3b8' }
-                            }
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: active ? tag.color : '#cbd5e1' }} />
-                            {tag.name}
-                            {active && <X size={9} />}
-                          </button>
-                        );
-                      })}
-                    </div>
+                {/* Active tags + add button */}
+                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <div className="flex flex-wrap gap-1.5 flex-1">
+                    {(order.order_tags || []).map((ot: any) => ot.tags).filter(Boolean).map((tag: any) => (
+                      <span
+                        key={tag.id}
+                        className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[10px] font-bold"
+                        style={{ backgroundColor: tag.color + '25', color: tag.color }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                        {tag.name}
+                        <button
+                          onMouseDown={(e) => { e.stopPropagation(); toggleOrderTag(order.id, tag.id, true); }}
+                          className="ml-0.5 w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-black/10"
+                        ><X size={8} /></button>
+                      </span>
+                    ))}
+                    {(order.order_tags || []).length === 0 && (
+                      <span className="text-[9px] text-slate-300">нет меток</span>
+                    )}
                   </div>
-                )}
-
-                <div className="mt-3 pt-2 flex justify-end">
-                  <span className="text-[9px] text-slate-300">{new Date(order.created_at).toLocaleDateString()}</span>
+                  {tags.length > 0 && (
+                    <div className="relative shrink-0" data-dropdown>
+                      <button
+                        onMouseDown={(e) => { e.stopPropagation(); setOpenTagDropdown(openTagDropdown === order.id ? null : order.id); }}
+                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors"
+                        title="Добавить метку"
+                      ><Plus size={13} /></button>
+                      {openTagDropdown === order.id && (
+                        <div className="absolute bottom-full right-0 mb-1 z-20 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[150px]">
+                          {tags.filter(tag => !orderTagIds.has(tag.id)).map(tag => (
+                            <button
+                              key={tag.id}
+                              onMouseDown={(e) => { e.stopPropagation(); toggleOrderTag(order.id, tag.id, false); setOpenTagDropdown(null); }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors"
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                              <span style={{ color: tag.color }}>{tag.name}</span>
+                            </button>
+                          ))}
+                          {tags.filter(tag => !orderTagIds.has(tag.id)).length === 0 && (
+                            <p className="px-3 py-2 text-xs text-slate-400">Все метки добавлены</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
               );

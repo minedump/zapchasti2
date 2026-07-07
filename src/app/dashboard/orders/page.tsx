@@ -22,11 +22,17 @@ export default function OrdersPage() {
     fetchTags();
   }, []);
 
-  // Close dropdowns on outside click
+  // Close dropdowns on outside click (mousedown fires before click, avoids same-click close)
   useEffect(() => {
-    const handler = () => { setOpenStatusId(null); setOpenTagPickerId(null); };
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
+    const handler = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (!t.closest('[data-dropdown]')) {
+        setOpenStatusId(null);
+        setOpenTagPickerId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   const fetchOrders = async () => {
@@ -107,9 +113,9 @@ export default function OrdersPage() {
                     </div>
 
                     {/* Status dropdown */}
-                    <div className="relative">
+                    <div className="relative" data-dropdown>
                       <button
-                        onClick={(e) => { e.stopPropagation(); setOpenStatusId(openStatusId === order.id ? null : order.id); }}
+                        onMouseDown={(e) => { e.stopPropagation(); setOpenStatusId(openStatusId === order.id ? null : order.id); }}
                         className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase cursor-pointer transition-all hover:opacity-80"
                         style={order.order_statuses
                           ? { backgroundColor: order.order_statuses.color + '20', color: order.order_statuses.color }
@@ -127,7 +133,7 @@ export default function OrdersPage() {
                           {statuses.map(s => (
                             <button
                               key={s.id}
-                              onClick={(e) => { e.stopPropagation(); updateStatus(order.id, s.id); }}
+                              onMouseDown={(e) => { e.stopPropagation(); updateStatus(order.id, s.id); }}
                               className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors"
                             >
                               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
@@ -149,17 +155,21 @@ export default function OrdersPage() {
                     ))}
                   </div>
 
-                  {/* Active tags */}
+                  {/* Active tags with remove */}
                   {activeTagList.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {activeTagList.map((tag: any) => (
                         <span
                           key={tag.id}
-                          className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
-                          style={{ backgroundColor: tag.color + '20', color: tag.color }}
+                          className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[10px] font-bold"
+                          style={{ backgroundColor: tag.color + '25', color: tag.color }}
                         >
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
                           {tag.name}
+                          <button
+                            onMouseDown={(e) => { e.stopPropagation(); toggleTag(order.id, tag.id, true); }}
+                            className="ml-0.5 w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-black/10"
+                          ><X size={8} /></button>
                         </span>
                       ))}
                     </div>
@@ -178,9 +188,9 @@ export default function OrdersPage() {
 
                   {/* Tag picker */}
                   {tags.length > 0 && (
-                    <div className="relative">
+                    <div className="relative" data-dropdown>
                       <button
-                        onClick={(e) => { e.stopPropagation(); setOpenTagPickerId(openTagPickerId === order.id ? null : order.id); }}
+                        onMouseDown={(e) => { e.stopPropagation(); setOpenTagPickerId(openTagPickerId === order.id ? null : order.id); }}
                         className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors"
                         title="Добавить метку"
                       >
@@ -193,7 +203,7 @@ export default function OrdersPage() {
                             return (
                               <button
                                 key={tag.id}
-                                onClick={(e) => { e.stopPropagation(); toggleTag(order.id, tag.id, active); }}
+                                onMouseDown={(e) => { e.stopPropagation(); toggleTag(order.id, tag.id, active); setOpenTagPickerId(null); }}
                                 className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors"
                               >
                                 <span className="flex items-center gap-2">
