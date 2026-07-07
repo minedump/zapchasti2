@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { randomBytes } from 'node:crypto';
 import { supabaseAdmin } from '@/lib/supabase';
 
 const GATEWAY_URL = process.env.WECHAT_GATEWAY_URL;
@@ -34,21 +35,30 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
+
+  // Two callers hit this route: creating a brand-new account (only a
+  // human-facing `label`, no bot_name yet — we generate the technical
+  // routing key and it's never shown in the UI) and retrying an existing
+  // one after a failed login (bot_name given directly, label untouched).
+  let botName: string = body.bot_name;
+  const isNew = !botName;
+  if (isNew) {
+    botName = `wc-${randomBytes(6).toString('hex')}`;
+  }
+
   const res = await fetch(`${GATEWAY_URL}/v1/accounts`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify(body),
+    body: JSON.stringify({ bot_name: botName }),
   });
   const data = await res.json();
   if (!res.ok) return NextResponse.json(data, { status: res.status });
 
-  // Initial label defaults to whatever name was used to connect the account —
-  // editable later without touching the gateway's own bot_name (immutable
-  // session key). Only set on first registration, never overwritten here.
-  if (body.bot_name) {
+  if (isNew) {
+    const label = typeof body.label === 'string' && body.label.trim() ? body.label.trim() : botName;
     await supabaseAdmin
       .from('wechat_account_labels')
-      .upsert({ bot_name: body.bot_name, label: body.bot_name }, { onConflict: 'bot_name', ignoreDuplicates: true });
+      .upsert({ bot_name: botName, label }, { onConflict: 'bot_name', ignoreDuplicates: true });
   }
 
   return NextResponse.json(data, { status: res.status });

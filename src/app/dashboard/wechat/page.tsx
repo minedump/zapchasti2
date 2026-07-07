@@ -33,7 +33,7 @@ const STATUS_LABELS: Record<AccountStatus, { label: string; className: string }>
 export default function WeChatPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newBotName, setNewBotName] = useState('');
+  const [newLabel, setNewLabel] = useState('');
   const [creating, setCreating] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const qrCanvasCache = useRef<Record<string, string>>({});
@@ -77,10 +77,10 @@ export default function WeChatPage() {
   }, [accounts]);
 
   const createAccount = async () => {
-    const botName = newBotName.trim();
-    if (!botName) return;
-    if (accounts.some((a) => a.bot_name === botName)) {
-      toast.error('Такой аккаунт уже есть');
+    const label = newLabel.trim();
+    if (!label) return;
+    if (accounts.some((a) => a.label === label)) {
+      toast.error('Аккаунт с таким именем уже есть');
       return;
     }
 
@@ -89,7 +89,7 @@ export default function WeChatPage() {
       const res = await fetch('/api/wechat/accounts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bot_name: botName }),
+        body: JSON.stringify({ label }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -97,7 +97,7 @@ export default function WeChatPage() {
         return;
       }
       toast.success('Аккаунт создан, ждём QR-код');
-      setNewBotName('');
+      setNewLabel('');
       setShowAdd(false);
       await fetchAccounts();
     } catch {
@@ -181,9 +181,9 @@ export default function WeChatPage() {
         {showAdd && (
           <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2">
             <Input
-              placeholder="Название аккаунта, например sales-1"
-              value={newBotName}
-              onChange={(e) => setNewBotName(e.target.value)}
+              placeholder="Имя аккаунта, например Продажи-1"
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && createAccount()}
               className="flex-1 bg-white"
               autoFocus
@@ -240,7 +240,6 @@ export default function WeChatPage() {
                         </div>
                       )}
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="font-mono text-xs text-slate-400">{acc.bot_name}</span>
                         <span className={cn('px-2.5 py-1 rounded-full text-xs font-bold uppercase', statusInfo.className)}>
                           {statusInfo.label}
                         </span>
