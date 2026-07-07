@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Save, Trash2, Edit3, X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Plus, Save, Trash2, Edit3, X, AlertCircle, CheckCircle2, HelpCircle, ChevronDown } from 'lucide-react';
 import { Button, Input, Skeleton } from '@/components/ui';
 import { toast, Toaster } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,7 @@ export default function CommandsPage() {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>(null);
+  const [showGuide, setShowGuide] = useState(false);
 
   useEffect(() => {
     fetchCommands();
@@ -97,10 +98,69 @@ export default function CommandsPage() {
           </h1>
           <p className="text-slate-500 mt-1">Управление сценариями работы ассистента</p>
         </div>
-        <Button onClick={handleAdd} className="gap-2">
-          <Plus size={18} /> Создать команду
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setShowGuide(v => !v)} className="gap-2">
+            <HelpCircle size={18} /> Как писать промпты
+            <ChevronDown size={14} className={showGuide ? 'rotate-180 transition-transform' : 'transition-transform'} />
+          </Button>
+          <Button onClick={handleAdd} className="gap-2">
+            <Plus size={18} /> Создать команду
+          </Button>
+        </div>
       </div>
+
+      {showGuide && (
+        <div className="mb-8 bg-slate-50 border border-slate-200 rounded-2xl p-6 space-y-5 text-sm text-slate-700 leading-relaxed">
+          <div>
+            <h3 className="font-bold text-slate-900 mb-1">1. Что AI видит, кроме вашего текста</h3>
+            <p>
+              К промпту команды перед отправкой в модель автоматически добавляется блок:
+            </p>
+            <pre className="mt-2 bg-white border border-slate-200 rounded-lg p-3 text-xs font-mono whitespace-pre-wrap">{`ТЕКУЩИЕ ДАННЫЕ: {"vin": "...", "part_name": "..."}\nПОПЫТКА №1 ДЛЯ ТЕКУЩЕГО ПУНКТА.`}</pre>
+            <p className="mt-2 text-slate-500">
+              Это уже собранные на данный момент данные и номер попытки уточнения текущего вопроса. Дублировать это в тексте инструкции не нужно.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-slate-900 mb-1">2. Как завершить сценарий и создать заказ</h3>
+            <p>Выведите валидный JSON внутри тега:</p>
+            <pre className="mt-2 bg-white border border-slate-200 rounded-lg p-3 text-xs font-mono whitespace-pre-wrap">{`<RESULT>{ "vin": "Z8T...", "part_name": "колодки", "budget": 2000 }</RESULT>`}</pre>
+            <p className="mt-2 text-slate-500">
+              Всё внутри тега должно быть валидным JSON — это станет телом заказа. Каждая пара ключ/значение отобразится отдельной строкой в карточке заказа в панели «Заказы клиента» — используйте понятные ключи (snake_case), они же подписи полей.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-slate-900 mb-1">3. Как завершить сценарий без заказа</h3>
+            <p>
+              Выведите пустой тег <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">{`<RESULT></RESULT>`}</code> — заказ не создаётся, но команда всё равно считается завершённой, и чат передаётся оператору. Подходит для утилитарных команд без сбора данных (комплимент, шутка и т.п.), где не нужна карточка заказа.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-slate-900 mb-1">4. Что реально видит клиент</h3>
+            <p>
+              Клиенту в Telegram уходит весь текст ответа, кроме содержимого самого тега <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">{`<RESULT>...</RESULT>`}</code>. Чтобы команда отвечала и сразу завершалась одним сообщением (без диалога), пишите видимый текст перед тегом в этом же ответе:
+            </p>
+            <pre className="mt-2 bg-white border border-slate-200 rounded-lg p-3 text-xs font-mono whitespace-pre-wrap">{`Вот твой комплимент: ты сегодня прекрасно выглядишь!\n<RESULT></RESULT>`}</pre>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-slate-900 mb-1">5. Одна активная команда на чат</h3>
+            <p>
+              Пока в чате не завершена текущая команда (бейдж рядом с именем клиента в шапке чата), вторая команда не запустится — клиент получит сообщение «Пожалуйста, сначала завершите текущий опрос» (оно же видно оператору в чате с пометкой «Система»). Сбросить команду вручную можно крестиком на бейдже — чат вернётся в режим агента по умолчанию, не переключаясь на оператора.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-bold text-slate-900 mb-1">6. Режим по умолчанию (без активной команды)</h3>
+            <p>
+              Когда активной команды нет, бот отвечает по промпту из раздела «Настройки» → «Промпт ассистента», дополняя его всеми активными статьями из «Базы знаний».
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-6">
         {loading ? (

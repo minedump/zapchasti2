@@ -402,16 +402,18 @@ export default function DashboardPage() {
                 return (
                   <div key={msg.id} className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[70%] p-3 rounded-2xl ${
-                      msg.is_from_bot 
-                        ? 'bg-purple-100 text-purple-900 rounded-br-none' 
-                        : msg.sender_id 
-                          ? 'bg-blue-600 text-white rounded-br-none' 
+                      msg.is_from_bot
+                        ? (msg.is_ai_generated
+                            ? 'bg-purple-100 text-purple-900 rounded-br-none'
+                            : 'bg-amber-100 text-amber-800 rounded-br-none')
+                        : msg.sender_id
+                          ? 'bg-blue-600 text-white rounded-br-none'
                           : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-sm'
                     }`}>
                       <p className="text-sm">{msg.content}</p>
                       <span className="text-[10px] opacity-50 mt-1 block text-right">
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        {msg.is_ai_generated && ' • AI'}
+                        {msg.is_from_bot && (msg.is_ai_generated ? ' • AI' : ' • Система')}
                       </span>
                     </div>
                   </div>

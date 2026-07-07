@@ -17,6 +17,85 @@ async function sendTelegramMessage(chatId: number, text: string) {
   });
 }
 
+// Системные уведомления (например, блокировка повторной команды) — тоже пишем в messages,
+// чтобы оператор видел их в CRM, а не только клиент в Telegram.
+// is_from_bot: true + is_ai_generated: false отличает их от настоящих AI-ответов.
+async function sendSystemMessage(dbChatId: string, telegramChatId: number, text: string) {
+  await sendTelegramMessage(telegramChatId, text);
+  await supabaseAdmin.from('messages').insert([{
+    chat_id: dbChatId,
+    content: text,
+    is_from_bot: true,
+    is_ai_generated: false
+  }]);
+}
+
+// Разбирает ответ AI на предмет тега <RESULT>...</RESULT>, которым завершается команда.
+// Поддерживает два варианта:
+//  - <RESULT>{ ...json... }</RESULT> — создаёт заказ с этими данными и передаёт чат оператору;
+//  - <RESULT></RESULT> (пусто или невалидный JSON) — просто завершает сценарий без заказа.
+// Используется и при первом ответе на запуск команды, и при последующих репликах —
+// раньше это распознавалось только во втором случае, из-за чего команды, завершающиеся
+// сразу первым сообщением (без сбора данных), зависали с "сырыми" тегами в чате.
+async function finishCommandTurn(chatData: any, telegramChatId: number, aiResponse: string) {
+  const resultMatch = aiResponse.match(/<RESULT>([\s\S]*?)<\/RESULT>/i);
+
+  if (!resultMatch) {
+    await sendTelegramMessage(telegramChatId, aiResponse);
+    await supabaseAdmin.from('messages').insert([{
+      chat_id: chatData.id,
+      content: aiResponse,
+      is_from_bot: true,
+      is_ai_generated: true
+    }]);
+    return;
+  }
+
+  const jsonString = resultMatch[1].trim();
+  const cleanMessage = aiResponse.replace(/<RESULT>[\s\S]*?<\/RESULT>/i, "").trim();
+  let finalJson: any = null;
+
+  if (jsonString) {
+    try {
+      finalJson = JSON.parse(jsonString);
+    } catch (e) {
+      console.error('JSON Parse Error:', e);
+    }
+  }
+
+  if (finalJson) {
+    const { data: statusData } = await supabaseAdmin
+      .from('order_statuses')
+      .select('id')
+      .eq('name', 'Новый')
+      .single();
+
+    await supabaseAdmin.from('orders').insert([{
+      chat_id: chatData.id,
+      data: finalJson,
+      status_id: statusData?.id
+    }]);
+  }
+
+  await supabaseAdmin.from('chats').update({
+    status: 'operator_needed',
+    active_command_id: null,
+    ai_metadata: { collected_data: finalJson || {} }
+  }).eq('id', chatData.id);
+
+  const suffix = finalJson
+    ? "\n\n✅ Данные собраны. Сейчас подключится оператор."
+    : "\n\n✅ Готово. Сейчас подключится оператор.";
+  await sendTelegramMessage(telegramChatId, (cleanMessage || "Готово.") + suffix);
+
+  await supabaseAdmin.from('messages').insert([{
+    chat_id: chatData.id,
+    content: cleanMessage,
+    is_from_bot: true,
+    is_ai_generated: true
+  }]);
+}
+
 async function askDeepSeek(text: string, history: any[], currentState: any, retryCount: number, promptTemplate: string) {
   const systemPrompt = `
     ${promptTemplate}
@@ -102,7 +181,7 @@ export async function POST(req: Request) {
     // Блокируем переключение, только если уже идёт другая команда,
     // а не просто потому что бот в режиме агента по умолчанию
     if (chatData.active_command_id) {
-      await sendTelegramMessage(telegramChatId, "Пожалуйста, сначала завершите текущий опрос.");
+      await sendSystemMessage(chatData.id, telegramChatId, "Пожалуйста, сначала завершите текущий опрос.");
       return NextResponse.json({ ok: true });
     }
 
@@ -125,22 +204,15 @@ export async function POST(req: Request) {
       }).eq('id', chatData.id);
 
       const aiResponse = await askDeepSeek(
-        "Начни опрос", 
-        [], 
+        "Начни опрос",
+        [],
         {},
         0,
         commandData.prompt_template
       );
 
-      await sendTelegramMessage(telegramChatId, aiResponse);
-      
-      await supabaseAdmin.from('messages').insert([{
-        chat_id: chatData.id,
-        content: aiResponse,
-        is_from_bot: true,
-        is_ai_generated: true
-      }]);
-      
+      await finishCommandTurn(chatData, telegramChatId, aiResponse);
+
       return NextResponse.json({ ok: true });
     }
   }
@@ -191,57 +263,14 @@ export async function POST(req: Request) {
       .order('created_at', { ascending: true });
 
     const aiResponse = await askDeepSeek(
-      text, 
-      history || [], 
+      text,
+      history || [],
       metadata.collected_data || {},
       metadata.retry_count || 0,
       currentPrompt
     );
 
-    // Логика парсинга результата
-    const resultMatch = aiResponse.match(/<RESULT>([\s\S]*?)<\/RESULT>/i);
-    
-    if (resultMatch) {
-      try {
-        const jsonString = resultMatch[1].trim();
-        const finalJson = JSON.parse(jsonString);
-        
-        // Получаем ID статуса 'Новый'
-        const { data: statusData } = await supabaseAdmin
-          .from('order_statuses')
-          .select('id')
-          .eq('name', 'Новый')
-          .single();
-
-        // Создаем новый заказ
-        await supabaseAdmin.from('orders').insert([{
-          chat_id: chatData.id,
-          data: finalJson,
-          status_id: statusData?.id
-        }]);
-
-        await supabaseAdmin.from('chats').update({
-          status: 'operator_needed',
-          active_command_id: null,
-          ai_metadata: { collected_data: finalJson }
-        }).eq('id', chatData.id);
-
-        const cleanMessage = aiResponse.replace(/<RESULT>[\s\S]*?<\/RESULT>/i, "").trim();
-        await sendTelegramMessage(telegramChatId, cleanMessage + "\n\n✅ Данные собраны. Сейчас подключится оператор.");
-      } catch (e) {
-        console.error('JSON Parse Error:', e);
-        await sendTelegramMessage(telegramChatId, aiResponse);
-      }
-    } else {
-      await sendTelegramMessage(telegramChatId, aiResponse);
-    }
-
-    await supabaseAdmin.from('messages').insert([{
-      chat_id: chatData.id,
-      content: aiResponse.replace(/<RESULT>[\s\S]*?<\/RESULT>/i, "").trim(),
-      is_from_bot: true,
-      is_ai_generated: true
-    }]);
+    await finishCommandTurn(chatData, telegramChatId, aiResponse);
   }
 
   return NextResponse.json({ ok: true });
