@@ -14,6 +14,7 @@ export default function DashboardPage() {
   const chatIdFromUrl = searchParams.get('chatId');
 
   const [chats, setChats] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [hasInitialSelected, setHasInitialSelected] = useState(false);
@@ -284,8 +285,10 @@ export default function DashboardPage() {
         <div className="h-[65px] px-4 border-b bg-white flex items-center">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <Input 
-              placeholder="Поиск чатов..." 
+            <Input
+              placeholder="Поиск чатов..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 bg-slate-50 border-slate-200 w-full"
             />
           </div>
@@ -305,7 +308,9 @@ export default function DashboardPage() {
               </div>
             ))
           ) : (
-            chats.map((chat) => (
+            chats
+              .filter((chat) => (chat.customer_name || '').toLowerCase().includes(searchQuery.trim().toLowerCase()))
+              .map((chat) => (
               <button
                 key={chat.id}
                 onClick={() => handleChatSelect(chat)}
