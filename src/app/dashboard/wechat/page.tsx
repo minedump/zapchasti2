@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import QRCode from 'qrcode';
-import { Plus, RefreshCw, Copy, Check, AlertCircle, MessageCircle, Pencil, X } from 'lucide-react';
+import { Plus, RefreshCw, Copy, Check, AlertCircle, Pencil, X } from 'lucide-react';
+import { WeChatIcon } from '@/components/icons';
 import { Button, Input, Skeleton } from '@/components/ui';
 import { toast, Toaster } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
@@ -181,7 +182,7 @@ export default function WeChatPage() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-              <MessageCircle className="text-emerald-600" size={28} />
+              <WeChatIcon className="text-emerald-600" size={28} />
               WeChat
             </h1>
             <p className="text-slate-500 mt-1">Аккаунты для приёма и отправки сообщений в WeChat</p>
@@ -213,7 +214,7 @@ export default function WeChatPage() {
           ) : accounts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-4 bg-white rounded-2xl border border-slate-200">
               <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">
-                <MessageCircle size={28} className="text-slate-300" />
+                <WeChatIcon size={28} className="text-slate-300" />
               </div>
               <div className="text-center">
                 <p className="text-sm font-medium text-slate-400">Аккаунтов пока нет</p>
