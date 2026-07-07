@@ -46,7 +46,9 @@ export async function findOrCreateChat(opts: {
       [matchColumn]: matchValue,
       channel,
       customer_name: customerName,
-      status: 'bot_processing',
+      // Новый чат не активирует AI сам по себе — только явная команда
+      // (см. processIncomingMessage) переводит его в bot_processing.
+      status: 'operator_needed',
       avatar_color: pickAvatarColor(String(matchValue)),
       ai_metadata: { step: 'start', retry_count: 0, collected_data: {} },
       ...extraFields,
