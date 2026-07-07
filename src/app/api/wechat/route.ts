@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { findOrCreateChat, processIncomingMessage, type ChatSender } from '@/lib/chatAgent';
+import { supabaseAdmin } from '@/lib/supabase';
 
 const GATEWAY_URL = process.env.WECHAT_GATEWAY_URL;
 const GATEWAY_API_KEY = process.env.WECHAT_GATEWAY_API_KEY;
@@ -51,10 +52,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // Только для новых чатов — findOrCreateChat не трогает существующие customer_name,
+  // а дальнейшие переименования метки аккаунта распространяются триггером на БД.
+  const { data: labelRow } = await supabaseAdmin
+    .from('wechat_account_labels')
+    .select('label')
+    .eq('bot_name', bot_name)
+    .maybeSingle();
+
   const chatData = await findOrCreateChat({
     channel: 'wechat',
     matchColumn: 'wechat_user_id',
     matchValue: userId,
+    customerName: labelRow?.label ?? bot_name,
     extraFields: { wechat_bot_name: bot_name },
   });
 

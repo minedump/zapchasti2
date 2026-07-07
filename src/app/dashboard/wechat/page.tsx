@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import QRCode from 'qrcode';
-import { Plus, RefreshCw, Copy, Check, AlertCircle, MessageCircle } from 'lucide-react';
+import { Plus, RefreshCw, Copy, Check, AlertCircle, MessageCircle, Pencil, X } from 'lucide-react';
 import { Button, Input, Skeleton } from '@/components/ui';
 import { toast, Toaster } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
@@ -11,6 +11,7 @@ type AccountStatus = 'pending_qr' | 'scanned' | 'logged_in' | 'expired' | 'error
 
 interface Account {
   bot_name: string;
+  label: string;
   status: AccountStatus;
   qr_url?: string;
   error?: string;
@@ -38,6 +39,9 @@ export default function WeChatPage() {
   const qrCanvasCache = useRef<Record<string, string>>({});
   const [qrImages, setQrImages] = useState<Record<string, string>>({});
   const [copiedFor, setCopiedFor] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState<string | null>(null);
+  const [labelDraft, setLabelDraft] = useState('');
+  const [savingLabel, setSavingLabel] = useState(false);
 
   const fetchAccounts = useCallback(async () => {
     try {
@@ -119,6 +123,37 @@ export default function WeChatPage() {
     }
   };
 
+  const startEditLabel = (acc: Account) => {
+    setEditingLabel(acc.bot_name);
+    setLabelDraft(acc.label);
+  };
+
+  const saveLabel = async (botName: string) => {
+    const label = labelDraft.trim();
+    if (!label) return;
+
+    setSavingLabel(true);
+    try {
+      const res = await fetch(`/api/wechat/accounts/${encodeURIComponent(botName)}/label`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error || 'Не удалось сохранить имя');
+        return;
+      }
+      toast.success('Имя обновлено');
+      setEditingLabel(null);
+      await fetchAccounts();
+    } catch {
+      toast.error('Не удалось сохранить имя');
+    } finally {
+      setSavingLabel(false);
+    }
+  };
+
   const copyLink = async (url: string, botName: string) => {
     await navigator.clipboard.writeText(url);
     setCopiedFor(botName);
@@ -180,10 +215,36 @@ export default function WeChatPage() {
                 <div key={acc.bot_name} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <span className="font-mono font-bold text-slate-800">{acc.bot_name}</span>
-                      <span className={cn('ml-3 px-2.5 py-1 rounded-full text-xs font-bold uppercase', statusInfo.className)}>
-                        {statusInfo.label}
-                      </span>
+                      {editingLabel === acc.bot_name ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={labelDraft}
+                            onChange={(e) => setLabelDraft(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && saveLabel(acc.bot_name)}
+                            className="h-8 py-1 text-sm"
+                            autoFocus
+                          />
+                          <Button size="sm" className="p-1.5" disabled={savingLabel} onClick={() => saveLabel(acc.bot_name)}>
+                            <Check size={14} />
+                          </Button>
+                          <Button variant="secondary" size="sm" className="p-1.5" onClick={() => setEditingLabel(null)}>
+                            <X size={14} />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-800">{acc.label}</span>
+                          <button onClick={() => startEditLabel(acc)} className="text-slate-300 hover:text-slate-500 cursor-pointer">
+                            <Pencil size={13} />
+                          </button>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="font-mono text-xs text-slate-400">{acc.bot_name}</span>
+                        <span className={cn('px-2.5 py-1 rounded-full text-xs font-bold uppercase', statusInfo.className)}>
+                          {statusInfo.label}
+                        </span>
+                      </div>
                     </div>
                     {(acc.status === 'error' || acc.status === 'expired' || acc.status === 'not_started') && (
                       <Button variant="secondary" size="sm" className="gap-2" onClick={() => retryAccount(acc.bot_name)}>

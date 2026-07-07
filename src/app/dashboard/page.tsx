@@ -15,12 +15,6 @@ import { Button, Input, Skeleton } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { toast, Toaster } from 'react-hot-toast';
 
-// WeChat пока не даёт реального имени контакта (только userId вида o9cq...@im.wechat) —
-// показываем название WeChat-аккаунта, через который идёт диалог, вместо голого "Клиент".
-function chatDisplayName(chat: any): string | undefined {
-  return chat.customer_name || (chat.channel === 'wechat' ? chat.wechat_bot_name : undefined);
-}
-
 export default function DashboardPage() {
   const searchParams = useSearchParams();
   const chatIdFromUrl = searchParams.get('chatId');
@@ -326,10 +320,10 @@ export default function DashboardPage() {
                   selectedChat?.id === chat.id ? "bg-white shadow-sm z-10" : "hover:bg-white/50"
                 )}
               >
-                <ChatAvatar name={chatDisplayName(chat)} color={chat.avatar_color} />
+                <ChatAvatar name={chat.customer_name} color={chat.avatar_color} />
                 <div className="flex-1 text-left min-w-0">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="font-bold text-slate-800 truncate">{chatDisplayName(chat) || 'Клиент'}</span>
+                    <span className="font-bold text-slate-800 truncate">{chat.customer_name || 'Клиент'}</span>
                     <span className="text-[10px] text-slate-400 shrink-0">
                       {new Date(chat.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
@@ -373,7 +367,7 @@ export default function DashboardPage() {
           <>
             <div className="h-[65px] px-4 bg-white border-b flex justify-between items-center shadow-sm">
               <div className="flex items-center gap-2 min-w-0">
-                <h2 className="font-bold text-slate-800 truncate">{chatDisplayName(selectedChat) || 'Чат с клиентом'}</h2>
+                <h2 className="font-bold text-slate-800 truncate">{selectedChat.customer_name || 'Чат с клиентом'}</h2>
                 {selectedChat.active_command && (
                   <span className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-100 text-purple-600 font-mono shrink-0">
                     {selectedChat.active_command.command}
