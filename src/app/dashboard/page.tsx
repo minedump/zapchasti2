@@ -52,17 +52,20 @@ export default function DashboardPage() {
     fetchChats();
     fetchStatuses();
     fetchTags();
-    // close status dropdown on outside click
-    const handler = () => setOpenStatusDropdown(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-    
+
     const chatChannel = supabase
       .channel('global-chat-updates')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => fetchChats())
       .subscribe();
 
     return () => { supabase.removeChannel(chatChannel); };
+  }, []);
+
+  // Close status dropdown on outside click
+  useEffect(() => {
+    const handler = () => setOpenStatusDropdown(null);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
   }, []);
 
   const fetchStatuses = async () => {
