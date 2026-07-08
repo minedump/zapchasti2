@@ -494,7 +494,7 @@ export default function DashboardPage() {
             {orders.map((order) => {
               const orderTagIds = new Set((order.order_tags || []).map((ot: any) => ot.tag_id));
               return (
-              <div key={order.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
+              <div key={order.id} className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-slate-300 transition-all">
                 {/* Header: номер + статус */}
                 <div className="flex justify-between items-center mb-3">
                   <Badge mono>#{order.order_number}</Badge>

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
-import { Plus, RefreshCw, Copy, Check, AlertCircle, MessageSquare, Edit3, Trash2, X } from 'lucide-react';
+import { Plus, RefreshCw, Copy, Check, AlertCircle, MessageCircle, Edit3, Trash2, X } from 'lucide-react';
 import { WeChatIcon } from '@/components/icons';
 import { Badge, Button, Input, Skeleton } from '@/components/ui';
 import type { BadgeVariant } from '@/components/ui';
@@ -256,7 +256,7 @@ export default function WeChatPage() {
               const statusInfo = STATUS_LABELS[acc.status] ?? STATUS_LABELS.not_started;
               const showQr = acc.qr_url && (acc.status === 'pending_qr' || acc.status === 'scanned');
               return (
-                <div key={acc.bot_name} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <div key={acc.bot_name} className="bg-white rounded-2xl border border-slate-200 hover:border-slate-300 transition-colors p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       {editingLabel === acc.bot_name ? (
@@ -294,22 +294,22 @@ export default function WeChatPage() {
                     </div>
                     <div className="flex gap-2 shrink-0">
                       {acc.chat_id && (
-                        <Button variant="secondary" size="sm" className="gap-2" onClick={() => router.push(`/dashboard?chatId=${acc.chat_id}`)}>
-                          <MessageSquare size={14} /> Открыть чат
+                        <Button variant="secondary" className="gap-2" onClick={() => router.push(`/dashboard?chatId=${acc.chat_id}`)}>
+                          <MessageCircle size={16} /> Открыть чат
                         </Button>
                       )}
                       {(acc.status === 'error' || acc.status === 'expired' || acc.status === 'not_started') && (
-                        <Button variant="secondary" size="sm" className="gap-2" onClick={() => retryAccount(acc.bot_name)}>
-                          <RefreshCw size={14} /> Повторить
+                        <Button variant="secondary" className="gap-2" onClick={() => retryAccount(acc.bot_name)}>
+                          <RefreshCw size={16} /> Повторить
                         </Button>
                       )}
                       {editingLabel !== acc.bot_name && (
-                        <Button variant="secondary" size="sm" className="gap-2" onClick={() => startEditLabel(acc)}>
-                          <Edit3 size={14} /> Редактировать
+                        <Button variant="secondary" className="gap-2" onClick={() => startEditLabel(acc)}>
+                          <Edit3 size={16} /> Редактировать
                         </Button>
                       )}
-                      <Button variant="danger" size="sm" className="p-2" onClick={() => deleteAccount(acc.bot_name, acc.label)}>
-                        <Trash2 size={14} />
+                      <Button variant="danger" className="gap-2" onClick={() => deleteAccount(acc.bot_name, acc.label)}>
+                        <Trash2 size={16} /> Удалить
                       </Button>
                     </div>
                   </div>

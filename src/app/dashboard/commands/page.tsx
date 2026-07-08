@@ -176,7 +176,7 @@ export default function CommandsPage() {
               key={cmd.id} 
               className={cn(
                 "w-full bg-white rounded-2xl border transition-all duration-200",
-                editingId === cmd.id ? "border-blue-500 ring-4 ring-blue-50 ring-offset-0" : "border-slate-200 hover:border-slate-300 hover:shadow-md"
+                editingId === cmd.id ? "border-blue-500 ring-4 ring-blue-50 ring-offset-0" : "border-slate-200 hover:border-slate-300"
               )}
             >
               {editingId === cmd.id ? (
@@ -250,12 +250,12 @@ export default function CommandsPage() {
                       )}
                       <h3 className="font-semibold text-slate-800">{cmd.description || 'Без описания'}</h3>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(cmd)} className="p-2">
-                        <Edit3 size={18} />
+                    <div className="flex gap-2 shrink-0">
+                      <Button variant="secondary" className="gap-2" onClick={() => handleEdit(cmd)}>
+                        <Edit3 size={16} /> Редактировать
                       </Button>
-                      <Button variant="danger" size="sm" onClick={() => handleDelete(cmd.id)} className="p-2">
-                        <Trash2 size={18} />
+                      <Button variant="danger" className="gap-2" onClick={() => handleDelete(cmd.id)}>
+                        <Trash2 size={16} /> Удалить
                       </Button>
                     </div>
                   </div>

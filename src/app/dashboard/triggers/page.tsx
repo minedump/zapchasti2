@@ -277,12 +277,12 @@ export default function TriggersPage() {
                           {rule.is_active ? 'активно' : 'выключено'}
                         </Badge>
                       </div>
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(rule)} className="p-2">
-                          <Edit3 size={18} />
+                      <div className="flex gap-2 shrink-0">
+                        <Button variant="secondary" className="gap-2" onClick={() => handleEdit(rule)}>
+                          <Edit3 size={16} /> Редактировать
                         </Button>
-                        <Button variant="danger" size="sm" onClick={() => handleDelete(rule.id)} className="p-2">
-                          <Trash2 size={18} />
+                        <Button variant="danger" className="gap-2" onClick={() => handleDelete(rule.id)}>
+                          <Trash2 size={16} /> Удалить
                         </Button>
                       </div>
                     </div>

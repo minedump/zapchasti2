@@ -114,7 +114,7 @@ export default function OrdersPage() {
             const orderTagIds = new Set((order.order_tags || []).map((ot: any) => ot.tag_id));
             const activeTagList = (order.order_tags || []).map((ot: any) => ot.tags).filter(Boolean);
             return (
-            <div key={order.id} className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-slate-300 hover:shadow-md transition-all">
+            <div key={order.id} className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-slate-300 transition-all">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div className="space-y-3 flex-1">
                   {/* Row: номер + клиент + статус */}
@@ -247,7 +247,7 @@ export default function OrdersPage() {
                     onClick={() => router.push(`/dashboard?chatId=${order.chat_id}`)}
                     className="gap-2"
                   >
-                    <MessageCircle size={18} /> В чат
+                    <MessageCircle size={16} /> Открыть чат
                   </Button>
                 </div>
               </div>
