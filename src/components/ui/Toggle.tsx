@@ -6,11 +6,17 @@ interface ToggleProps {
   onChange: (checked: boolean) => void;
   disabled?: boolean;
   className?: string;
+  color?: 'blue' | 'green';
   "aria-label"?: string;
 }
 
+const CHECKED_COLOR_CLASSES: Record<NonNullable<ToggleProps['color']>, string> = {
+  blue: 'bg-blue-600',
+  green: 'bg-emerald-500',
+};
+
 export const Toggle = React.forwardRef<HTMLButtonElement, ToggleProps>((
-  { checked, onChange, disabled, className, ...props }, ref
+  { checked, onChange, disabled, className, color = 'blue', ...props }, ref
 ) => (
   <button
     ref={ref}
@@ -21,7 +27,7 @@ export const Toggle = React.forwardRef<HTMLButtonElement, ToggleProps>((
     onClick={() => onChange(!checked)}
     className={cn(
       "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
-      checked ? "bg-blue-600" : "bg-slate-200",
+      checked ? CHECKED_COLOR_CLASSES[color] : "bg-slate-200",
       className
     )}
     {...props}

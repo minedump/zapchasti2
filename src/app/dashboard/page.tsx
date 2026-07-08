@@ -16,6 +16,7 @@ export default function DashboardPage() {
 
   const [chats, setChats] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [channelFilter, setChannelFilter] = useState<'all' | 'telegram' | 'wechat'>('all');
   const [loading, setLoading] = useState(true);
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [hasInitialSelected, setHasInitialSelected] = useState(false);
@@ -323,6 +324,32 @@ export default function DashboardPage() {
             />
           </div>
         </div>
+        <div className="flex gap-1.5 px-4 py-2 border-b bg-white">
+          <Button
+            size="sm"
+            variant={channelFilter === 'all' ? 'primary' : 'secondary'}
+            className="flex-1"
+            onClick={() => setChannelFilter('all')}
+          >
+            Все
+          </Button>
+          <Button
+            size="sm"
+            variant={channelFilter === 'telegram' ? 'primary' : 'secondary'}
+            className="flex-1 gap-1.5"
+            onClick={() => setChannelFilter('telegram')}
+          >
+            <TelegramIcon size={13} /> TG
+          </Button>
+          <Button
+            size="sm"
+            variant={channelFilter === 'wechat' ? 'primary' : 'secondary'}
+            className="flex-1 gap-1.5"
+            onClick={() => setChannelFilter('wechat')}
+          >
+            <WeChatIcon size={13} /> WeChat
+          </Button>
+        </div>
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             [1, 2, 3, 4, 5].map(i => (
@@ -340,6 +367,7 @@ export default function DashboardPage() {
           ) : (
             chats
               .filter((chat) => (chat.customer_name || '').toLowerCase().includes(searchQuery.trim().toLowerCase()))
+              .filter((chat) => channelFilter === 'all' || chat.channel === channelFilter)
               .map((chat) => (
               <button
                 key={chat.id}
@@ -358,13 +386,13 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge icon={chat.status === 'bot_processing' ? <Bot size={12} /> : <User size={12} />}>
+                    <Badge uppercase={false} icon={chat.status === 'bot_processing' ? <Bot size={12} /> : <User size={12} />}>
                       {chat.status === 'bot_processing' ? 'AI' : 'Оператор'}
                     </Badge>
                     {chat.channel === 'wechat' ? (
-                      <Badge variant="wechat" icon={<WeChatIcon size={11} />}>WeChat</Badge>
+                      <Badge variant="wechat" uppercase={false} icon={<WeChatIcon size={11} />}>WeChat</Badge>
                     ) : (
-                      <Badge variant="telegram" icon={<TelegramIcon size={11} />}>TG</Badge>
+                      <Badge variant="telegram" uppercase={false} icon={<TelegramIcon size={11} />}>TG</Badge>
                     )}
                     {chat.active_command && (
                       <Badge mono>{chat.active_command.command}</Badge>
@@ -534,7 +562,7 @@ export default function DashboardPage() {
                 {/* Оплата + команда-источник */}
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
-                    <Toggle checked={!!order.is_paid} onChange={(v) => togglePaid(order.id, v)} aria-label="Статус оплаты" />
+                    <Toggle checked={!!order.is_paid} onChange={(v) => togglePaid(order.id, v)} color="green" aria-label="Статус оплаты" />
                     <span className={order.is_paid ? 'text-[10px] font-bold uppercase text-emerald-600' : 'text-[10px] font-bold uppercase text-slate-400'}>
                       {order.is_paid ? 'Оплачен' : 'Не оплачен'}
                     </span>

@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { MessageCircle, Calendar, User, ChevronDown, Plus, X } from 'lucide-react';
-import { Badge, Button, Skeleton, Toggle } from '@/components/ui';
+import { MessageCircle, Calendar, ChevronDown, Plus, Search, X } from 'lucide-react';
+import { Badge, Button, Input, Skeleton, Toggle } from '@/components/ui';
 import { Footer } from '@/components/Footer';
+import { cn } from '@/lib/utils';
 import { toast, Toaster } from 'react-hot-toast';
 
 export default function OrdersPage() {
@@ -15,6 +16,9 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [openStatusId, setOpenStatusId] = useState<string | null>(null);
   const [openTagPickerId, setOpenTagPickerId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [paidFilter, setPaidFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
   const router = useRouter();
 
   useEffect(() => {
@@ -92,6 +96,12 @@ export default function OrdersPage() {
     fetchOrders();
   };
 
+  // Все три фильтра независимы и совмещаются друг с другом (AND)
+  const filteredOrders = orders
+    .filter((o) => statusFilter === 'all' || o.status_id === statusFilter)
+    .filter((o) => paidFilter === 'all' || (paidFilter === 'paid' ? !!o.is_paid : !o.is_paid))
+    .filter((o) => (o.chats?.customer_name || '').toLowerCase().includes(searchQuery.trim().toLowerCase()));
+
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
     <Toaster position="top-right" />
@@ -105,25 +115,90 @@ export default function OrdersPage() {
         </div>
       </div>
 
+      {/* Filters */}
+      <div className="mb-6 space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <Input
+            placeholder="Поиск по имени клиента..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            onClick={() => setStatusFilter('all')}
+            className={cn(
+              'px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase transition-colors',
+              statusFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+            )}
+          >
+            Все статусы
+          </button>
+          {statuses.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setStatusFilter(statusFilter === s.id ? 'all' : s.id)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase transition-colors"
+              style={statusFilter === s.id
+                ? { backgroundColor: s.color, color: '#fff' }
+                : { backgroundColor: '#f1f5f9', color: '#94a3b8' }
+              }
+            >
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: statusFilter === s.id ? '#fff' : s.color }} />
+              {s.name}
+            </button>
+          ))}
+
+          <span className="w-px h-5 bg-slate-200 mx-1" />
+
+          <button
+            onClick={() => setPaidFilter('all')}
+            className={cn(
+              'px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase transition-colors',
+              paidFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+            )}
+          >
+            Все
+          </button>
+          <button
+            onClick={() => setPaidFilter(paidFilter === 'paid' ? 'all' : 'paid')}
+            className={cn(
+              'px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase transition-colors',
+              paidFilter === 'paid' ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+            )}
+          >
+            Оплачен
+          </button>
+          <button
+            onClick={() => setPaidFilter(paidFilter === 'unpaid' ? 'all' : 'unpaid')}
+            className={cn(
+              'px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase transition-colors',
+              paidFilter === 'unpaid' ? 'bg-slate-500 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+            )}
+          >
+            Не оплачен
+          </button>
+        </div>
+      </div>
+
       {/* Orders list */}
       <div className="grid gap-6">
         {loading ? (
           [1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 w-full rounded-2xl" />)
         ) : (
-          orders.map((order) => {
+          filteredOrders.map((order) => {
             const orderTagIds = new Set((order.order_tags || []).map((ot: any) => ot.tag_id));
             const activeTagList = (order.order_tags || []).map((ot: any) => ot.tags).filter(Boolean);
             return (
             <div key={order.id} className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-slate-300 transition-all">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-                <div className="space-y-3 flex-1">
-                  {/* Row: номер + клиент + статус */}
+                <div className="space-y-2 flex-1 min-w-0">
+                  {/* Row 1: Заказ №4 + статус + оплата */}
                   <div className="flex items-center gap-3 flex-wrap">
-                    <Badge mono>#{order.order_number}</Badge>
-                    <div className="flex items-center gap-2 text-slate-800 font-semibold">
-                      <User size={16} className="text-slate-400" />
-                      {order.chats?.customer_name || 'Клиент'}
-                    </div>
+                    <span className="text-lg font-bold text-slate-900">Заказ №{order.order_number}</span>
 
                     {/* Status dropdown */}
                     <div className="relative" data-dropdown>
@@ -159,66 +234,50 @@ export default function OrdersPage() {
 
                     {/* Оплата */}
                     <div className="flex items-center gap-2">
-                      <Toggle checked={!!order.is_paid} onChange={(v) => togglePaid(order.id, v)} aria-label="Статус оплаты" />
+                      <Toggle checked={!!order.is_paid} onChange={(v) => togglePaid(order.id, v)} color="green" aria-label="Статус оплаты" />
                       <span className={order.is_paid ? 'text-xs font-bold text-emerald-600' : 'text-xs font-bold text-slate-400'}>
                         {order.is_paid ? 'Оплачен' : 'Не оплачен'}
                       </span>
                     </div>
-
-                    {/* Команда-источник */}
-                    <span className="text-[10px] font-mono text-slate-400" title={order.command?.description}>
-                      {order.command_id ? (order.command?.command || order.command?.description || '…') : 'без команды'}
-                    </span>
                   </div>
 
-                  {/* Data fields */}
-                  <div className="flex flex-wrap gap-2">
-                    {Object.entries(order.data || {}).map(([key, value]: [string, any]) => (
-                      <div key={key} className="px-3 py-1.5 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-                        <span className="text-slate-400 mr-1">{key}:</span>
-                        <span className="font-medium text-slate-700">{String(value)}</span>
-                      </div>
+                  {/* Row 2: клиент + дата + команда + метки */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm text-slate-500">
+                      {order.chats?.customer_name || 'Клиент'}
+                    </span>
+                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                      <Calendar size={12} />
+                      {new Date(order.created_at).toLocaleDateString()} {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <Badge mono={!!order.command_id} title={order.command?.description}>
+                      {order.command_id ? (order.command?.command || order.command?.description || '…') : 'без команды'}
+                    </Badge>
+                    {activeTagList.map((tag: any) => (
+                      <Badge
+                        key={tag.id}
+                        color={tag.color}
+                        dot
+                        uppercase={false}
+                        onRemove={() => toggleTag(order.id, tag.id, true)}
+                      >
+                        {tag.name}
+                      </Badge>
                     ))}
                   </div>
-
-                  {/* Active tags with remove */}
-                  {activeTagList.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {activeTagList.map((tag: any) => (
-                        <Badge
-                          key={tag.id}
-                          color={tag.color}
-                          dot
-                          uppercase={false}
-                          onRemove={() => toggleTag(order.id, tag.id, true)}
-                        >
-                          {tag.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
-                <div className="flex items-center gap-3">
-                  {/* Date */}
-                  <div className="text-right hidden md:block">
-                    <div className="text-xs text-slate-400 flex items-center justify-end gap-1">
-                      <Calendar size={12} />
-                      {new Date(order.created_at).toLocaleDateString()}
-                    </div>
-                    <div className="text-[10px] text-slate-300">{new Date(order.created_at).toLocaleTimeString()}</div>
-                  </div>
-
+                <div className="flex items-center gap-2 shrink-0">
                   {/* Tag picker */}
                   {tags.length > 0 && (
                     <div className="relative" data-dropdown>
-                      <button
+                      <Button
+                        variant="secondary"
+                        className="gap-2"
                         onMouseDown={(e) => { e.stopPropagation(); setOpenTagPickerId(openTagPickerId === order.id ? null : order.id); }}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors"
-                        title="Добавить метку"
                       >
-                        <Plus size={15} />
-                      </button>
+                        <Plus size={16} /> Добавить метку
+                      </Button>
                       {openTagPickerId === order.id && (
                         <div className="absolute top-full right-0 mt-1 z-20 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[160px]">
                           {tags.map(tag => {
@@ -251,14 +310,27 @@ export default function OrdersPage() {
                   </Button>
                 </div>
               </div>
+
+              {/* Row 3: Данные заказа — на всю ширину */}
+              <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="text-[10px] font-bold text-slate-400 uppercase mb-2">Данные заказа</div>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(order.data || {}).map(([key, value]: [string, any]) => (
+                    <div key={key} className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs">
+                      <span className="text-slate-400 mr-1">{key}:</span>
+                      <span className="font-medium text-slate-700">{String(value)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
             );
           })
         )}
 
-        {orders.length === 0 && !loading && (
+        {filteredOrders.length === 0 && !loading && (
           <div className="text-center py-20 text-slate-400 bg-white rounded-2xl border-2 border-dashed">
-            Заказов пока нет
+            {orders.length === 0 ? 'Заказов пока нет' : 'Ничего не найдено по заданным фильтрам'}
           </div>
         )}
       </div>
