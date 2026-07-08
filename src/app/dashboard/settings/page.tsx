@@ -114,7 +114,7 @@ export default function SettingsPage() {
           {[1,2].map(j => (
             <div key={j} className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
               <div className="flex items-center gap-3">
-                <Skeleton className="w-6 h-6 rounded-full" />
+                <Skeleton className="w-8 h-8 rounded-full" />
                 <Skeleton className="h-4 w-32" />
               </div>
               <Skeleton className="w-8 h-8 rounded-lg" />
@@ -180,7 +180,7 @@ export default function SettingsPage() {
           title="Статусы заказов"
           description="Цветовые статусы для управления заказами"
           action={
-            <Button size="sm" variant="secondary" className="gap-2" onClick={() => setShowAddStatus(v => !v)}>
+            <Button variant="secondary" className="gap-2" onClick={() => setShowAddStatus(v => !v)}>
               <Plus size={16} /> Добавить
             </Button>
           }
@@ -216,7 +216,7 @@ export default function SettingsPage() {
           title="Метки"
           description="Теги для классификации чатов и заказов"
           action={
-            <Button size="sm" variant="secondary" className="gap-2" onClick={() => setShowAddTag(v => !v)}>
+            <Button variant="secondary" className="gap-2" onClick={() => setShowAddTag(v => !v)}>
               <Plus size={16} /> Добавить
             </Button>
           }
@@ -254,7 +254,7 @@ export default function SettingsPage() {
           title="База знаний"
           description="Статьи, которые бот использует при ответах"
           action={
-            <Button size="sm" variant="secondary" className="gap-2" onClick={() => setShowAddArticle(v => !v)}>
+            <Button variant="secondary" className="gap-2" onClick={() => setShowAddArticle(v => !v)}>
               <Plus size={16} /> Добавить статью
             </Button>
           }
@@ -358,7 +358,7 @@ function AddRow({ colorValue, onColorChange, nameValue, onNameChange, placeholde
         type="color"
         value={colorValue}
         onChange={e => onColorChange(e.target.value)}
-        className="w-8 h-8 rounded-lg cursor-pointer border border-slate-200 bg-transparent shrink-0"
+        className="w-9 h-9 rounded-full cursor-pointer border border-slate-200 bg-transparent shrink-0"
       />
       <Input
         placeholder={placeholder}
@@ -392,7 +392,7 @@ function ItemRow({ color, name, badge, onColorChange, onDelete }: {
           type="color"
           value={color}
           onChange={e => onColorChange(e.target.value)}
-          className="w-7 h-7 rounded-lg cursor-pointer border border-slate-200 bg-transparent"
+          className="w-8 h-8 rounded-full cursor-pointer border border-slate-200 bg-transparent"
         />
         <span className="font-medium text-slate-700 text-sm">{name}</span>
         {badge && (
