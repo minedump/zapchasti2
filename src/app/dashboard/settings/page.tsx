@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Plus, Trash2, Palette, Tag, BookOpen, MessageSquare, Save, X, Check, Tags } from 'lucide-react';
-import { Button, Input, Textarea, Skeleton } from '@/components/ui';
+import { Badge, Button, Input, Textarea, Skeleton } from '@/components/ui';
+import { Footer } from '@/components/Footer';
 import { toast, Toaster } from 'react-hot-toast';
 
 export default function SettingsPage() {
@@ -97,48 +98,40 @@ export default function SettingsPage() {
     fetchData();
   };
 
-  if (loading) return (
-    <div className="p-8 max-w-5xl mx-auto w-full space-y-6">
-      <div className="flex items-center gap-3 mb-2">
-        <Skeleton className="w-8 h-8 rounded-lg" />
-        <Skeleton className="h-8 w-56" />
-      </div>
-      <Skeleton className="h-4 w-72" />
-      {[1,2,3,4].map(i => (
-        <div key={i} className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
-          <div className="flex justify-between items-center">
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="h-9 w-28 rounded-lg" />
-          </div>
-          <Skeleton className="h-px w-full" />
-          {[1,2].map(j => (
-            <div key={j} className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
-              <div className="flex items-center gap-3">
-                <Skeleton className="w-8 h-8 rounded-full" />
-                <Skeleton className="h-4 w-32" />
-              </div>
-              <Skeleton className="w-8 h-8 rounded-lg" />
-            </div>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-    <div className="p-8 max-w-5xl mx-auto w-full pb-4 flex-1">
+    <div className="p-8 max-w-5xl mx-auto w-full flex-1">
       <Toaster />
 
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-            Настройки
-          </h1>
+          <h1 className="text-3xl font-bold text-slate-900">Настройки</h1>
           <p className="text-slate-500 mt-1">Промпт бота, база знаний и справочники</p>
         </div>
       </div>
 
+      {loading ? (
+        <div className="space-y-6">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4">
+              <div className="flex justify-between items-center">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-9 w-28 rounded-lg" />
+              </div>
+              <Skeleton className="h-px w-full" />
+              {[1,2].map(j => (
+                <div key={j} className="flex items-center justify-between p-3 rounded-xl bg-slate-50">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="w-8 h-8 rounded-full" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                  <Skeleton className="w-8 h-8 rounded-lg" />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="space-y-8">
 
         {/* === Промпт ассистента === */}
@@ -273,46 +266,47 @@ export default function SettingsPage() {
                 className="min-h-[100px] resize-none"
               />
               <div className="flex gap-2 justify-end">
-                <Button size="sm" variant="secondary" className="gap-1" onClick={() => { setShowAddArticle(false); setNewArticleTitle(''); setNewArticleContent(''); }}>
-                  <X size={14} /> Отмена
+                <Button variant="secondary" className="gap-2" onClick={() => { setShowAddArticle(false); setNewArticleTitle(''); setNewArticleContent(''); }}>
+                  <X size={16} /> Отмена
                 </Button>
-                <Button size="sm" className="gap-1" onClick={addArticle}>
-                  <Check size={14} /> Сохранить
+                <Button className="gap-2" onClick={addArticle}>
+                  <Check size={16} /> Добавить
                 </Button>
               </div>
             </div>
           )}
-          <div className="space-y-3">
-            {knowledge.map(k => (
-              <div key={k.id} className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <Input
-                    defaultValue={k.title}
-                    onBlur={e => updateKnowledge(k.id, { title: e.target.value })}
-                    className="font-semibold bg-white"
+          {(knowledge.length > 0 || !showAddArticle) && (
+            <div className="space-y-3">
+              {knowledge.map(k => (
+                <div key={k.id} className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <Input
+                      defaultValue={k.title}
+                      onBlur={e => updateKnowledge(k.id, { title: e.target.value })}
+                      className="font-semibold bg-white"
+                    />
+                    <Button variant="danger" size="sm" className="shrink-0 p-2" onClick={() => deleteItem('knowledge_base', k.id, false)}>
+                      <Trash2 size={16} />
+                    </Button>
+                  </div>
+                  <Textarea
+                    defaultValue={k.content}
+                    onBlur={e => updateKnowledge(k.id, { content: e.target.value })}
+                    className="min-h-[100px] resize-none"
                   />
-                  <Button variant="danger" size="sm" className="shrink-0 p-2" onClick={() => deleteItem('knowledge_base', k.id, false)}>
-                    <Trash2 size={16} />
-                  </Button>
                 </div>
-                <Textarea
-                  defaultValue={k.content}
-                  onBlur={e => updateKnowledge(k.id, { content: e.target.value })}
-                  className="min-h-[100px] resize-none"
-                />
-              </div>
-            ))}
-            {knowledge.length === 0 && !showAddArticle && (
-              <p className="text-sm text-slate-400 py-2">Статей пока нет</p>
-            )}
-          </div>
+              ))}
+              {knowledge.length === 0 && !showAddArticle && (
+                <p className="text-sm text-slate-400 py-2">Статей пока нет</p>
+              )}
+            </div>
+          )}
         </Section>
 
       </div>
+      )}
     </div>
-    <footer className="shrink-0 border-t border-slate-200 bg-white px-8 py-3 text-center text-xs text-slate-400">
-      &copy; {new Date().getFullYear()} PromptFlow &mdash; CRM для Telegram
-    </footer>
+    <Footer />
     </div>
   );
 }
@@ -368,11 +362,11 @@ function AddRow({ colorValue, onColorChange, nameValue, onNameChange, placeholde
         className="flex-1 bg-white"
         autoFocus
       />
-      <Button size="sm" className="gap-1 shrink-0" onClick={onConfirm}>
-        <Check size={14} /> Добавить
+      <Button className="gap-2 shrink-0" onClick={onConfirm}>
+        <Check size={16} /> Добавить
       </Button>
-      <Button size="sm" variant="secondary" className="shrink-0 p-2" onClick={onCancel}>
-        <X size={14} />
+      <Button variant="secondary" className="gap-2 shrink-0" onClick={onCancel}>
+        <X size={16} /> Отмена
       </Button>
     </div>
   );
@@ -395,13 +389,11 @@ function ItemRow({ color, name, badge, onColorChange, onDelete }: {
           className="w-8 h-8 rounded-full cursor-pointer border border-slate-200 bg-transparent"
         />
         <span className="font-medium text-slate-700 text-sm">{name}</span>
-        {badge && (
-          <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase">{badge}</span>
-        )}
+        {badge && <Badge>{badge}</Badge>}
       </div>
       {onDelete && (
-        <Button variant="danger" size="sm" className="p-2" onClick={onDelete}>
-          <Trash2 size={15} />
+        <Button variant="danger" className="p-2.5" onClick={onDelete}>
+          <Trash2 size={16} />
         </Button>
       )}
     </div>

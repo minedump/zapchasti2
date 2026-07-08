@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Plus, Save, Trash2, Edit3, X, Workflow } from 'lucide-react';
-import { Button, Input, Select, Skeleton, Toggle } from '@/components/ui';
+import { Badge, Button, Input, Select, Skeleton, Toggle } from '@/components/ui';
+import { Footer } from '@/components/Footer';
 import { toast, Toaster } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
@@ -160,10 +161,7 @@ export default function TriggersPage() {
 
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-              <Workflow className="text-blue-600" size={28} />
-              Триггеры
-            </h1>
+            <h1 className="text-3xl font-bold text-slate-900">Триггеры</h1>
             <p className="text-slate-500 mt-1">Автоматическая пересылка заказов по правилам</p>
           </div>
           <Button onClick={handleAdd} className="gap-2">
@@ -275,12 +273,9 @@ export default function TriggersPage() {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
                         <h3 className="font-semibold text-slate-800">{rule.name}</h3>
-                        <span className={cn(
-                          "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
-                          rule.is_active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"
-                        )}>
+                        <Badge variant={rule.is_active ? 'green' : 'neutral'}>
                           {rule.is_active ? 'активно' : 'выключено'}
-                        </span>
+                        </Badge>
                       </div>
                       <div className="flex gap-2">
                         <Button variant="ghost" size="sm" onClick={() => handleEdit(rule)} className="p-2">
@@ -328,12 +323,9 @@ export default function TriggersPage() {
                     <td className="p-3 text-slate-700">{entry.order?.order_number ? `#${entry.order.order_number}` : '—'}</td>
                     <td className="p-3 text-slate-700">{entry.chat?.customer_name ?? '—'}</td>
                     <td className="p-3">
-                      <span className={cn(
-                        "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
-                        entry.status === 'ok' ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"
-                      )} title={entry.error_message ?? undefined}>
+                      <Badge variant={entry.status === 'ok' ? 'green' : 'red'} title={entry.error_message ?? undefined}>
                         {entry.status === 'ok' ? 'ок' : 'ошибка'}
-                      </span>
+                      </Badge>
                     </td>
                   </tr>
                 ))}
@@ -342,9 +334,7 @@ export default function TriggersPage() {
           )}
         </div>
       </div>
-      <footer className="shrink-0 border-t border-slate-200 bg-white px-8 py-3 text-center text-xs text-slate-400">
-        &copy; {new Date().getFullYear()} PromptFlow &mdash; CRM для Telegram и WeChat
-      </footer>
+      <Footer />
     </div>
   );
 }

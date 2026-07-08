@@ -1,3 +1,5 @@
+export { Badge } from './Badge';
+export type { BadgeVariant } from './Badge';
 export { Button } from './Button';
 export { Input } from './Input';
 export { Skeleton } from './Skeleton';

@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Plus, Save, Trash2, Edit3, X, AlertCircle, CheckCircle2, HelpCircle, ChevronDown } from 'lucide-react';
-import { Button, Input, Select, Textarea, Skeleton } from '@/components/ui';
+import { Badge, Button, Input, Select, Textarea, Skeleton } from '@/components/ui';
+import { Footer } from '@/components/Footer';
 import { toast, Toaster } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 
@@ -99,9 +100,7 @@ export default function CommandsPage() {
 
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-            AI команды
-          </h1>
+          <h1 className="text-3xl font-bold text-slate-900">AI команды</h1>
           <p className="text-slate-500 mt-1">Управление сценариями работы ассистента</p>
         </div>
         <div className="flex gap-2">
@@ -239,23 +238,15 @@ export default function CommandsPage() {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex flex-col md:flex-row md:items-center gap-2 flex-wrap">
                       {cmd.command ? (
-                        <span className="w-fit px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-bold font-mono">
-                          {cmd.command}
-                        </span>
+                        <Badge mono>{cmd.command}</Badge>
                       ) : (
-                        <span className="w-fit px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs font-bold uppercase">
-                          только для пересылки
-                        </span>
+                        <Badge>только для пересылки</Badge>
                       )}
                       {cmd.channel && (
-                        <span className="w-fit px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-bold uppercase">
-                          {cmd.channel}
-                        </span>
+                        <Badge>{cmd.channel}</Badge>
                       )}
                       {cmd.badge && (
-                        <span className="w-fit px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full text-[10px] font-bold uppercase">
-                          {cmd.badge}
-                        </span>
+                        <Badge>{cmd.badge}</Badge>
                       )}
                       <h3 className="font-semibold text-slate-800">{cmd.description || 'Без описания'}</h3>
                     </div>
@@ -278,9 +269,7 @@ export default function CommandsPage() {
         )}
       </div>
     </div>
-    <footer className="shrink-0 border-t border-slate-200 bg-white px-8 py-3 text-center text-xs text-slate-400">
-      &copy; {new Date().getFullYear()} PromptFlow &mdash; CRM для Telegram
-    </footer>
+    <Footer />
     </div>
   );
 }

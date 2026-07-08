@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
 import { Plus, RefreshCw, Copy, Check, AlertCircle, MessageSquare, Edit3, Trash2, X } from 'lucide-react';
 import { WeChatIcon } from '@/components/icons';
-import { Button, Input, Skeleton } from '@/components/ui';
+import { Badge, Button, Input, Skeleton } from '@/components/ui';
+import type { BadgeVariant } from '@/components/ui';
+import { Footer } from '@/components/Footer';
 import { toast, Toaster } from 'react-hot-toast';
-import { cn } from '@/lib/utils';
 
 type AccountStatus = 'pending_qr' | 'scanned' | 'logged_in' | 'expired' | 'error' | 'not_started';
 
@@ -38,13 +39,13 @@ function describeFatalError(err: string): string {
   return err;
 }
 
-const STATUS_LABELS: Record<AccountStatus, { label: string; className: string }> = {
-  not_started: { label: 'Не запущен', className: 'bg-slate-100 text-slate-500' },
-  pending_qr: { label: 'Ждём сканирования', className: 'bg-amber-100 text-amber-700' },
-  scanned: { label: 'Отсканирован', className: 'bg-blue-100 text-blue-700' },
-  logged_in: { label: 'Подключён', className: 'bg-emerald-100 text-emerald-700' },
-  expired: { label: 'QR истёк', className: 'bg-slate-100 text-slate-500' },
-  error: { label: 'Ошибка', className: 'bg-red-100 text-red-600' },
+const STATUS_LABELS: Record<AccountStatus, { label: string; variant: BadgeVariant }> = {
+  not_started: { label: 'Не запущен', variant: 'neutral' },
+  pending_qr: { label: 'Ждём сканирования', variant: 'neutral' },
+  scanned: { label: 'Отсканирован', variant: 'neutral' },
+  logged_in: { label: 'Подключён', variant: 'green' },
+  expired: { label: 'QR истёк', variant: 'neutral' },
+  error: { label: 'Ошибка', variant: 'red' },
 };
 
 export default function WeChatPage() {
@@ -206,9 +207,7 @@ export default function WeChatPage() {
 
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-              WeChat
-            </h1>
+            <h1 className="text-3xl font-bold text-slate-900">WeChat</h1>
             <p className="text-slate-500 mt-1">Аккаунты для приёма и отправки сообщений в WeChat</p>
           </div>
           <Button onClick={() => setShowAdd((v) => !v)} className="gap-2">
@@ -286,17 +285,11 @@ export default function WeChatPage() {
                       ) : (
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-slate-800">{acc.label}</span>
-                          {acc.badge && (
-                            <span className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full text-[10px] font-bold uppercase">
-                              {acc.badge}
-                            </span>
-                          )}
+                          {acc.badge && <Badge>{acc.badge}</Badge>}
                         </div>
                       )}
                       <div className="flex items-center gap-2 mt-1">
-                        <span className={cn('px-2.5 py-1 rounded-full text-xs font-bold uppercase', statusInfo.className)}>
-                          {statusInfo.label}
-                        </span>
+                        <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
                       </div>
                     </div>
                     <div className="flex gap-2 shrink-0">
@@ -363,9 +356,7 @@ export default function WeChatPage() {
           )}
         </div>
       </div>
-      <footer className="shrink-0 border-t border-slate-200 bg-white px-8 py-3 text-center text-xs text-slate-400">
-        &copy; {new Date().getFullYear()} PromptFlow &mdash; CRM для Telegram и WeChat
-      </footer>
+      <Footer />
     </div>
   );
 }

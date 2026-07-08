@@ -3,9 +3,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
-import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, X } from 'lucide-react';
+import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus } from 'lucide-react';
 import { TelegramIcon, WeChatIcon } from '@/components/icons';
-import { Button, Input, Skeleton, Toggle } from '@/components/ui';
+import { Badge, Button, Input, Skeleton, Toggle } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { withBadge } from '@/lib/badge';
 import { toast, Toaster } from 'react-hot-toast';
@@ -358,29 +358,16 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={cn(
-                      "flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase",
-                      chat.status === 'bot_processing' ? "bg-purple-100 text-purple-600" : "bg-blue-100 text-blue-600"
-                    )}>
-                      {chat.status === 'bot_processing' ? (
-                        <><Bot size={12} /> AI</>
-                      ) : (
-                        <><User size={12} /> Оператор</>
-                      )}
-                    </span>
+                    <Badge icon={chat.status === 'bot_processing' ? <Bot size={12} /> : <User size={12} />}>
+                      {chat.status === 'bot_processing' ? 'AI' : 'Оператор'}
+                    </Badge>
                     {chat.channel === 'wechat' ? (
-                      <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-emerald-100 text-emerald-600">
-                        <WeChatIcon size={11} /> WeChat
-                      </span>
+                      <Badge variant="wechat" icon={<WeChatIcon size={11} />}>WeChat</Badge>
                     ) : (
-                      <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-sky-100 text-sky-500">
-                        <TelegramIcon size={11} /> TG
-                      </span>
+                      <Badge variant="telegram" icon={<TelegramIcon size={11} />}>TG</Badge>
                     )}
                     {chat.active_command && (
-                      <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-slate-200 text-slate-600 font-mono">
-                        {chat.active_command.command}
-                      </span>
+                      <Badge mono>{chat.active_command.command}</Badge>
                     )}
                   </div>
                 </div>
@@ -398,14 +385,9 @@ export default function DashboardPage() {
               <div className="flex items-center gap-2 min-w-0">
                 <h2 className="font-bold text-slate-800 truncate">{selectedChat.customer_name || 'Чат с клиентом'}</h2>
                 {selectedChat.active_command && (
-                  <span className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-100 text-purple-600 font-mono shrink-0">
+                  <Badge mono onRemove={resetActiveCommand} removeTitle="Сбросить команду" className="shrink-0">
                     {selectedChat.active_command.command}
-                    <button
-                      onClick={resetActiveCommand}
-                      title="Сбросить команду"
-                      className="ml-0.5 w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-black/10"
-                    ><X size={9} /></button>
-                  </span>
+                  </Badge>
                 )}
               </div>
               <Button
@@ -515,9 +497,7 @@ export default function DashboardPage() {
               <div key={order.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
                 {/* Header: номер + статус */}
                 <div className="flex justify-between items-center mb-3">
-                  <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-bold font-mono">
-                    #{order.order_number}
-                  </span>
+                  <Badge mono>#{order.order_number}</Badge>
                   {/* Status dropdown */}
                   <div className="relative" data-dropdown>
                     <button
@@ -578,18 +558,15 @@ export default function DashboardPage() {
                 <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
                   <div className="flex flex-wrap gap-1.5 flex-1">
                     {(order.order_tags || []).map((ot: any) => ot.tags).filter(Boolean).map((tag: any) => (
-                      <span
+                      <Badge
                         key={tag.id}
-                        className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[10px] font-bold"
-                        style={{ backgroundColor: tag.color + '25', color: tag.color }}
+                        color={tag.color}
+                        dot
+                        uppercase={false}
+                        onRemove={() => toggleOrderTag(order.id, tag.id, true)}
                       >
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
                         {tag.name}
-                        <button
-                          onMouseDown={(e) => { e.stopPropagation(); toggleOrderTag(order.id, tag.id, true); }}
-                          className="ml-0.5 w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-black/10"
-                        ><X size={8} /></button>
-                      </span>
+                      </Badge>
                     ))}
                     {(order.order_tags || []).length === 0 && (
                       <span className="text-[9px] text-slate-300">нет меток</span>

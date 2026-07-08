@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { MessageCircle, Calendar, User, ChevronDown, Plus, X } from 'lucide-react';
-import { Button, Skeleton, Toggle } from '@/components/ui';
+import { Badge, Button, Skeleton, Toggle } from '@/components/ui';
+import { Footer } from '@/components/Footer';
 import { toast, Toaster } from 'react-hot-toast';
 
 export default function OrdersPage() {
@@ -97,7 +98,7 @@ export default function OrdersPage() {
     <div className="p-8 max-w-5xl mx-auto w-full flex-1">
 
       {/* Header */}
-      <div className="flex justify-between items-start mb-8">
+      <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Все заказы</h1>
           <p className="text-slate-500 mt-1">История всех запросов от клиентов</p>
@@ -118,9 +119,7 @@ export default function OrdersPage() {
                 <div className="space-y-3 flex-1">
                   {/* Row: номер + клиент + статус */}
                   <div className="flex items-center gap-3 flex-wrap">
-                    <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm font-bold font-mono">
-                      #{order.order_number}
-                    </span>
+                    <Badge mono>#{order.order_number}</Badge>
                     <div className="flex items-center gap-2 text-slate-800 font-semibold">
                       <User size={16} className="text-slate-400" />
                       {order.chats?.customer_name || 'Клиент'}
@@ -186,18 +185,15 @@ export default function OrdersPage() {
                   {activeTagList.length > 0 && (
                     <div className="flex flex-wrap gap-1.5">
                       {activeTagList.map((tag: any) => (
-                        <span
+                        <Badge
                           key={tag.id}
-                          className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[10px] font-bold"
-                          style={{ backgroundColor: tag.color + '25', color: tag.color }}
+                          color={tag.color}
+                          dot
+                          uppercase={false}
+                          onRemove={() => toggleTag(order.id, tag.id, true)}
                         >
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
                           {tag.name}
-                          <button
-                            onMouseDown={(e) => { e.stopPropagation(); toggleTag(order.id, tag.id, true); }}
-                            className="ml-0.5 w-3.5 h-3.5 flex items-center justify-center rounded-full hover:bg-black/10"
-                          ><X size={8} /></button>
-                        </span>
+                        </Badge>
                       ))}
                     </div>
                   )}
@@ -267,9 +263,7 @@ export default function OrdersPage() {
         )}
       </div>
     </div>
-    <footer className="shrink-0 border-t border-slate-200 bg-white px-8 py-3 text-center text-xs text-slate-400">
-      &copy; {new Date().getFullYear()} PromptFlow &mdash; CRM для Telegram
-    </footer>
+    <Footer />
     </div>
   );
 }
