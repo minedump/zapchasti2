@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
 import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, X } from 'lucide-react';
 import { TelegramIcon, WeChatIcon } from '@/components/icons';
-import { Button, Input, Skeleton } from '@/components/ui';
+import { Button, Input, Skeleton, Toggle } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { toast, Toaster } from 'react-hot-toast';
 
@@ -227,6 +227,12 @@ export default function DashboardPage() {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status_id: statusId, order_statuses: status } : o));
     setOpenStatusDropdown(null);
     toast.success('Статус обновлён');
+  };
+
+  const togglePaid = async (orderId: string, isPaid: boolean) => {
+    // Оплата независима от статуса заказа — просто своё поле, без правил пересылки.
+    await supabase.from('orders').update({ is_paid: isPaid }).eq('id', orderId);
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, is_paid: isPaid } : o));
   };
 
   const toggleOrderTag = async (orderId: string, tagId: string, hasTag: boolean) => {
@@ -539,6 +545,14 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Оплата */}
+                <div className="flex items-center gap-2 mb-3">
+                  <Toggle checked={!!order.is_paid} onChange={(v) => togglePaid(order.id, v)} aria-label="Статус оплаты" />
+                  <span className={order.is_paid ? 'text-[10px] font-bold uppercase text-emerald-600' : 'text-[10px] font-bold uppercase text-slate-400'}>
+                    {order.is_paid ? 'Оплачен' : 'Не оплачен'}
+                  </span>
                 </div>
 
                 {/* Data fields */}

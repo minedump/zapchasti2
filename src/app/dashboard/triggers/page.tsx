@@ -199,10 +199,10 @@ export default function TriggersPage() {
                         onChange={e => setEditForm({ ...editForm, name: e.target.value })}
                         className="flex-1"
                       />
-                      <label className="flex items-center gap-2 text-sm text-slate-600 shrink-0">
+                      <div className="flex items-center gap-2 text-sm text-slate-600 shrink-0">
                         <Toggle checked={editForm.is_active} onChange={v => setEditForm({ ...editForm, is_active: v })} aria-label="Активно" />
                         активно
-                      </label>
+                      </div>
                     </div>
 
                     <div>
