@@ -7,6 +7,7 @@ import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus,
 import { TelegramIcon, WeChatIcon } from '@/components/icons';
 import { Button, Input, Skeleton, Toggle } from '@/components/ui';
 import { cn } from '@/lib/utils';
+import { withBadge } from '@/lib/badge';
 import { toast, Toaster } from 'react-hot-toast';
 
 export default function DashboardPage() {
@@ -207,7 +208,8 @@ export default function DashboardPage() {
       .select(`
         *,
         order_statuses (id, name, color),
-        order_tags (tag_id, tags (id, name, color))
+        order_tags (tag_id, tags (id, name, color)),
+        command:bot_commands (id, command, description)
       `)
       .eq('chat_id', chatId)
       .order('created_at', { ascending: false });
@@ -261,10 +263,12 @@ export default function DashboardPage() {
       badge = labelRow?.badge ?? null;
     }
 
+    const finalText = withBadge(newMessage, badge);
+
     // 1. Сохраняем в базу
     const { error } = await supabase.from('messages').insert([{
       chat_id: selectedChat.id,
-      content: newMessage,
+      content: finalText,
       sender_id: user?.id,
       is_from_bot: false,
       badge
@@ -279,7 +283,7 @@ export default function DashboardPage() {
           body: JSON.stringify({
             botName: selectedChat.wechat_bot_name,
             userId: selectedChat.wechat_user_id,
-            text: newMessage
+            text: finalText
           })
         });
       } else {
@@ -288,7 +292,7 @@ export default function DashboardPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             chatId: selectedChat.telegram_chat_id,
-            text: newMessage
+            text: finalText
           })
         });
       }
@@ -453,10 +457,10 @@ export default function DashboardPage() {
                           ? 'bg-blue-600 text-white rounded-br-none'
                           : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-sm'
                     }`}>
-                      <p className="text-sm">{msg.content}</p>
+                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                       <span className="text-[10px] opacity-50 mt-1 block text-right">
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        {msg.badge ? ` • ${msg.badge}` : msg.is_from_bot && (msg.is_ai_generated ? ' • AI' : ' • Система')}
+                        {msg.is_from_bot && (msg.is_ai_generated ? ' • AI' : ' • Система')}
                       </span>
                     </div>
                   </div>
@@ -547,11 +551,16 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Оплата */}
-                <div className="flex items-center gap-2 mb-3">
-                  <Toggle checked={!!order.is_paid} onChange={(v) => togglePaid(order.id, v)} aria-label="Статус оплаты" />
-                  <span className={order.is_paid ? 'text-[10px] font-bold uppercase text-emerald-600' : 'text-[10px] font-bold uppercase text-slate-400'}>
-                    {order.is_paid ? 'Оплачен' : 'Не оплачен'}
+                {/* Оплата + команда-источник */}
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2">
+                    <Toggle checked={!!order.is_paid} onChange={(v) => togglePaid(order.id, v)} aria-label="Статус оплаты" />
+                    <span className={order.is_paid ? 'text-[10px] font-bold uppercase text-emerald-600' : 'text-[10px] font-bold uppercase text-slate-400'}>
+                      {order.is_paid ? 'Оплачен' : 'Не оплачен'}
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono text-slate-400 truncate" title={order.command?.description}>
+                    {order.command_id ? (order.command?.command || order.command?.description || '…') : 'без команды'}
                   </span>
                 </div>
 

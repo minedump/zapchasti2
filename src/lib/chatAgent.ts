@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
+import { withBadge } from '@/lib/badge';
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
@@ -72,11 +73,12 @@ export async function findOrCreateChat(opts: {
 // чтобы оператор видел их в CRM, а не только клиент в мессенджере.
 // is_from_bot: true + is_ai_generated: false отличает их от настоящих AI-ответов.
 async function sendSystemMessage(dbChatId: string, sender: ChatSender, text: string) {
-  await sender.send(text);
   const badge = await getSetting('system_message_badge');
+  const finalText = withBadge(text, badge);
+  await sender.send(finalText);
   await supabaseAdmin.from('messages').insert([{
     chat_id: dbChatId,
-    content: text,
+    content: finalText,
     is_from_bot: true,
     is_ai_generated: false,
     badge
@@ -94,10 +96,11 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
   const resultMatch = aiResponse.match(/<RESULT>([\s\S]*?)<\/RESULT>/i);
 
   if (!resultMatch) {
-    await sender.send(aiResponse);
+    const finalText = withBadge(aiResponse, badge);
+    await sender.send(finalText);
     await supabaseAdmin.from('messages').insert([{
       chat_id: chatData.id,
-      content: aiResponse,
+      content: finalText,
       is_from_bot: true,
       is_ai_generated: true,
       badge
@@ -128,7 +131,8 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
     const { data: orderRow } = await supabaseAdmin.from('orders').insert([{
       chat_id: chatData.id,
       data: finalJson,
-      status_id: statusData?.id
+      status_id: statusData?.id,
+      command_id: chatData.active_command_id ?? null
     }]).select().maybeSingle();
     createdOrder = orderRow;
   }
@@ -142,11 +146,12 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
   const suffix = finalJson
     ? "\n\n✅ Данные собраны. Сейчас подключится оператор."
     : "\n\n✅ Готово. Сейчас подключится оператор.";
-  await sender.send((cleanMessage || "Готово.") + suffix);
+  const bodyText = cleanMessage || "Готово.";
+  await sender.send(withBadge(bodyText + suffix, badge));
 
   await supabaseAdmin.from('messages').insert([{
     chat_id: chatData.id,
-    content: cleanMessage,
+    content: withBadge(bodyText, badge),
     is_from_bot: true,
     is_ai_generated: true,
     badge

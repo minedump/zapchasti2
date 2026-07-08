@@ -1,6 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase';
 import { runPromptOnData } from '@/lib/chatAgent';
 import { getSenderForChat } from '@/lib/channelSenders';
+import { withBadge } from '@/lib/badge';
 
 interface ForwardCondition {
   field_path: string;
@@ -76,12 +77,13 @@ export async function runForwardRules(order: { id: string; data: any }, statusId
         content = formatOrderData(order.data);
       }
 
+      const finalContent = withBadge(content, badge);
       const sender = getSenderForChat(targetChat);
-      await sender.send(content);
+      await sender.send(finalContent);
 
       await supabaseAdmin.from('messages').insert([{
         chat_id: targetChat.id,
-        content,
+        content: finalContent,
         is_from_bot: true,
         is_ai_generated: isAiGenerated,
         badge,

@@ -43,7 +43,8 @@ export default function OrdersPage() {
         *,
         chats (id, customer_name, telegram_chat_id),
         order_statuses (id, name, color),
-        order_tags (tag_id, tags (id, name, color))
+        order_tags (tag_id, tags (id, name, color)),
+        command:bot_commands (id, command, description)
       `)
       .order('created_at', { ascending: false });
     if (data) setOrders(data);
@@ -164,6 +165,11 @@ export default function OrdersPage() {
                         {order.is_paid ? 'Оплачен' : 'Не оплачен'}
                       </span>
                     </div>
+
+                    {/* Команда-источник */}
+                    <span className="text-[10px] font-mono text-slate-400" title={order.command?.description}>
+                      {order.command_id ? (order.command?.command || order.command?.description || '…') : 'без команды'}
+                    </span>
                   </div>
 
                   {/* Data fields */}
