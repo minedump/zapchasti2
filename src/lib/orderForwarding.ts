@@ -67,7 +67,12 @@ export async function runForwardRules(order: { id: string; data: any }, statusId
           .maybeSingle();
 
         if (prompt?.prompt_template) {
-          content = await runPromptOnData(prompt.prompt_template, order.data);
+          const raw = await runPromptOnData(prompt.prompt_template, order.data);
+          // Пересылка — одноразовая трансформация, а не опрос клиента: тег
+          // <RESULT> тут не нужен, но модель иногда всё равно его вставляет
+          // (например, если промпт скопирован из обычной команды) — вырезаем,
+          // чтобы получателю не улетал сырой JSON в тегах.
+          content = raw.replace(/<RESULT>[\s\S]*?<\/RESULT>/gi, '').trim() || formatOrderData(order.data);
           badge = prompt.badge ?? null;
           isAiGenerated = true;
         } else {
