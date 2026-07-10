@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
-import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus } from 'lucide-react';
+import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, Edit3, Check, X } from 'lucide-react';
 import { TelegramIcon, WeChatIcon } from '@/components/icons';
 import { Badge, Button, Input, Skeleton, Toggle } from '@/components/ui';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,8 @@ export default function DashboardPage() {
   const [openStatusDropdown, setOpenStatusDropdown] = useState<string | null>(null);
   const [openTagDropdown, setOpenTagDropdown] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
+  const [editingChatName, setEditingChatName] = useState(false);
+  const [chatNameDraft, setChatNameDraft] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [hasMore, setHasMore] = useState(false);
@@ -98,8 +100,28 @@ export default function DashboardPage() {
     toast.success('Команда сброшена');
   };
 
+  const startEditChatName = () => {
+    setChatNameDraft(selectedChat.customer_name || '');
+    setEditingChatName(true);
+  };
+
+  const saveChatName = async () => {
+    const name = chatNameDraft.trim();
+    if (!name || !selectedChat) return;
+    const { error } = await supabase.from('chats').update({ customer_name: name }).eq('id', selectedChat.id);
+    if (error) {
+      toast.error('Не удалось сохранить имя');
+      return;
+    }
+    setSelectedChat((prev: any) => ({ ...prev, customer_name: name }));
+    setChats((prev) => prev.map((c) => c.id === selectedChat.id ? { ...c, customer_name: name } : c));
+    setEditingChatName(false);
+    toast.success('Имя обновлено');
+  };
+
   const handleChatSelect = (chat: any) => {
     setSelectedChat(chat);
+    setEditingChatName(false);
     const newUrl = `${window.location.pathname}?chatId=${chat.id}`;
     window.history.pushState({ path: newUrl }, '', newUrl);
   };
@@ -312,8 +334,8 @@ export default function DashboardPage() {
     <div className="flex h-full bg-white">
       <Toaster />
       {/* Chat List */}
-      <div className="w-80 border-r flex flex-col bg-slate-50/50">
-        <div className="h-[65px] px-4 border-b bg-white flex items-center">
+      <div className="w-80 border-r border-slate-200 flex flex-col bg-slate-50/50">
+        <div className="h-[65px] px-4 border-b border-slate-200 bg-white flex items-center">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <Input
@@ -324,7 +346,7 @@ export default function DashboardPage() {
             />
           </div>
         </div>
-        <div className="flex gap-1.5 px-4 py-2 border-b bg-white">
+        <div className="flex gap-1.5 px-4 py-2 border-b border-slate-200 bg-white">
           <Button
             size="sm"
             variant={channelFilter === 'all' ? 'primary' : 'secondary'}
@@ -353,7 +375,7 @@ export default function DashboardPage() {
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             [1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="p-4 border-b flex items-start gap-3">
+              <div key={i} className="p-4 border-b border-slate-100 flex items-start gap-3">
                 <Skeleton className="w-10 h-10 rounded-full shrink-0" />
                 <div className="flex-1 space-y-2">
                   <div className="flex justify-between items-center">
@@ -373,8 +395,8 @@ export default function DashboardPage() {
                 key={chat.id}
                 onClick={() => handleChatSelect(chat)}
                 className={cn(
-                  "w-full p-4 flex items-start gap-3 border-b transition-all cursor-pointer",
-                  selectedChat?.id === chat.id ? "bg-white shadow-sm z-10" : "hover:bg-white/50"
+                  "w-full p-4 flex items-start gap-3 border-b border-slate-100 border-l-4 transition-all cursor-pointer",
+                  selectedChat?.id === chat.id ? "bg-blue-50 border-l-blue-600" : "border-l-transparent hover:bg-white/50"
                 )}
               >
                 <ChatAvatar name={chat.customer_name} color={chat.avatar_color} />
@@ -409,9 +431,39 @@ export default function DashboardPage() {
       <div className="flex-1 flex flex-col bg-slate-50">
         {selectedChat ? (
           <>
-            <div className="h-[65px] px-4 bg-white border-b flex justify-between items-center shadow-sm">
+            <div className="h-[65px] px-4 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm">
               <div className="flex items-center gap-2 min-w-0">
-                <h2 className="font-bold text-slate-800 truncate">{selectedChat.customer_name || 'Чат с клиентом'}</h2>
+                {editingChatName ? (
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      value={chatNameDraft}
+                      onChange={(e) => setChatNameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveChatName();
+                        if (e.key === 'Escape') setEditingChatName(false);
+                      }}
+                      className="h-8 py-1 text-sm w-48"
+                      autoFocus
+                    />
+                    <Button size="sm" className="p-1.5" onClick={saveChatName}>
+                      <Check size={14} />
+                    </Button>
+                    <Button variant="secondary" size="sm" className="p-1.5" onClick={() => setEditingChatName(false)}>
+                      <X size={14} />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <h2 className="font-bold text-slate-800 truncate">{selectedChat.customer_name || 'Чат с клиентом'}</h2>
+                    <button
+                      onClick={startEditChatName}
+                      title="Переименовать чат"
+                      className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors focus-visible:outline-none"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                  </>
+                )}
                 {selectedChat.active_command && (
                   <Badge mono onRemove={resetActiveCommand} removeTitle="Сбросить команду" className="shrink-0">
                     {selectedChat.active_command.command}
@@ -479,7 +531,7 @@ export default function DashboardPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="p-4 bg-white border-t shadow-[0_-1px_2px_rgba(0,0,0,0.05)]">
+            <div className="p-4 bg-white border-t border-slate-200 shadow-[0_-1px_2px_rgba(0,0,0,0.05)]">
               <form 
                 onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
                 className="flex gap-2"
@@ -511,8 +563,8 @@ export default function DashboardPage() {
 
       {/* Right Info Panel */}
       {selectedChat && (
-        <div className="w-80 border-l bg-slate-50/30 flex flex-col">
-          <div className="h-[65px] px-4 border-b bg-white flex items-center">
+        <div className="w-80 border-l border-slate-200 bg-slate-50/30 flex flex-col">
+          <div className="h-[65px] px-4 border-b border-slate-200 bg-white flex items-center">
             <h3 className="font-bold text-slate-800 flex items-center gap-2">
               <ShoppingBag size={18} className="text-blue-600" /> Заказы клиента
             </h3>
@@ -530,7 +582,7 @@ export default function DashboardPage() {
                   <div className="relative" data-dropdown>
                     <button
                       onMouseDown={(e) => { e.stopPropagation(); setOpenStatusDropdown(openStatusDropdown === order.id ? null : order.id); }}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase cursor-pointer transition-all hover:opacity-80"
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase cursor-pointer transition-all hover:opacity-80 focus-visible:outline-none"
                       style={order.order_statuses
                         ? { backgroundColor: order.order_statuses.color + '20', color: order.order_statuses.color }
                         : { backgroundColor: '#f1f5f9', color: '#94a3b8' }
@@ -548,7 +600,7 @@ export default function DashboardPage() {
                           <button
                             key={s.id}
                             onMouseDown={(e) => { e.stopPropagation(); updateOrderStatus(order.id, s.id); }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors"
+                            className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors focus-visible:outline-none"
                           >
                             <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
                             <span style={{ color: s.color }}>{s.name}</span>
@@ -604,7 +656,7 @@ export default function DashboardPage() {
                     <div className="relative shrink-0" data-dropdown>
                       <button
                         onMouseDown={(e) => { e.stopPropagation(); setOpenTagDropdown(openTagDropdown === order.id ? null : order.id); }}
-                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors"
+                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors focus-visible:outline-none"
                         title="Добавить метку"
                       ><Plus size={13} /></button>
                       {openTagDropdown === order.id && (
@@ -613,7 +665,7 @@ export default function DashboardPage() {
                             <button
                               key={tag.id}
                               onMouseDown={(e) => { e.stopPropagation(); toggleOrderTag(order.id, tag.id, false); setOpenTagDropdown(null); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors"
+                              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors focus-visible:outline-none"
                             >
                               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
                               <span style={{ color: tag.color }}>{tag.name}</span>

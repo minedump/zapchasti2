@@ -204,7 +204,7 @@ export default function OrdersPage() {
                     <div className="relative" data-dropdown>
                       <button
                         onMouseDown={(e) => { e.stopPropagation(); setOpenStatusId(openStatusId === order.id ? null : order.id); }}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase cursor-pointer transition-all hover:opacity-80"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase cursor-pointer transition-all hover:opacity-80 focus-visible:outline-none"
                         style={order.order_statuses
                           ? { backgroundColor: order.order_statuses.color + '20', color: order.order_statuses.color }
                           : { backgroundColor: '#f1f5f9', color: '#94a3b8' }
@@ -222,7 +222,7 @@ export default function OrdersPage() {
                             <button
                               key={s.id}
                               onMouseDown={(e) => { e.stopPropagation(); updateStatus(order.id, s.id); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors"
+                              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors focus-visible:outline-none"
                             >
                               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
                               <span style={{ color: s.color }}>{s.name}</span>
@@ -273,7 +273,7 @@ export default function OrdersPage() {
                     <div className="relative" data-dropdown>
                       <Button
                         variant="secondary"
-                        className="gap-2"
+                        className="gap-2 focus-visible:outline-none"
                         onMouseDown={(e) => { e.stopPropagation(); setOpenTagPickerId(openTagPickerId === order.id ? null : order.id); }}
                       >
                         <Plus size={16} /> Добавить метку
@@ -286,7 +286,7 @@ export default function OrdersPage() {
                               <button
                                 key={tag.id}
                                 onMouseDown={(e) => { e.stopPropagation(); toggleTag(order.id, tag.id, active); setOpenTagPickerId(null); }}
-                                className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors"
+                                className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs font-semibold hover:bg-slate-50 transition-colors focus-visible:outline-none"
                               >
                                 <span className="flex items-center gap-2">
                                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />

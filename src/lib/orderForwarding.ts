@@ -63,20 +63,24 @@ export async function runForwardRules(order: { id: string; data: any; order_numb
       if (rule.prompt_id) {
         const { data: prompt } = await supabaseAdmin
           .from('bot_commands')
-          .select('prompt_template, badge')
+          .select('prompt_template, badge, starts_dialog')
           .eq('id', rule.prompt_id)
           .maybeSingle();
 
         if (prompt?.prompt_template) {
           const raw = await runPromptOnData(prompt.prompt_template, { ...order.data, order_number: order.order_number });
-          // Первое сообщение — одноразовая трансформация (без ожидания
-          // ответа), поэтому тег <RESULT> тут не нужен, но модель иногда
-          // всё равно его вставляет — вырезаем, чтобы получателю не улетал
-          // сырой JSON в тегах.
+          // Первое сообщение — всегда одноразовая трансформация текста, тег
+          // <RESULT> тут не нужен, но модель иногда всё равно его вставляет
+          // (например, если промпт написан в режиме диалога) — вырезаем,
+          // чтобы получателю не улетал сырой JSON в тегах.
           content = raw.replace(/<RESULT>[\s\S]*?<\/RESULT>/gi, '').trim() || formatOrderData(order.data);
           badge = prompt.badge ?? null;
           isAiGenerated = true;
-          promptId = rule.prompt_id;
+          // Продолжать диалогом (ждать ответ и завершиться через <RESULT>)
+          // нужно, только если это явно включено у команды галочкой "Режим
+          // диалога после пересылки" — иначе на этом первом сообщении всё
+          // и заканчивается.
+          if (prompt.starts_dialog) promptId = rule.prompt_id;
         } else {
           content = formatOrderData(order.data);
         }

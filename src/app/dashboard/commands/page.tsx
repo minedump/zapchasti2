@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Plus, Save, Trash2, Edit3, X, AlertCircle, CheckCircle2, HelpCircle, ChevronDown } from 'lucide-react';
-import { Badge, Button, Input, Select, Textarea, Skeleton } from '@/components/ui';
+import { Badge, Button, Input, Select, Textarea, Skeleton, Toggle } from '@/components/ui';
 import { Footer } from '@/components/Footer';
 import { toast, Toaster } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
@@ -28,7 +28,7 @@ export default function CommandsPage() {
 
   const handleAdd = () => {
     const newId = 'new-' + Date.now();
-    const newCmd = { id: newId, command: '', description: '', prompt_template: '', channel: null, badge: '', is_active: true, isNew: true };
+    const newCmd = { id: newId, command: '', description: '', prompt_template: '', channel: null, badge: '', is_active: true, starts_dialog: false, isNew: true };
     setCommands([newCmd, ...commands]);
     setEditingId(newId);
     setEditForm(newCmd);
@@ -36,13 +36,17 @@ export default function CommandsPage() {
 
   const handleEdit = (cmd: any) => {
     setEditingId(cmd.id);
-    setEditForm({ ...cmd, command: cmd.command ?? '', channel: cmd.channel ?? '', badge: cmd.badge ?? '' });
+    setEditForm({ ...cmd, command: cmd.command ?? '', channel: cmd.channel ?? '', badge: cmd.badge ?? '', starts_dialog: cmd.starts_dialog ?? false });
   };
 
   const handleSave = async () => {
     const command = editForm.command.trim();
     if (command && !command.startsWith('/')) {
       toast.error('Команда должна начинаться с /');
+      return;
+    }
+    if (editForm.starts_dialog && !command) {
+      toast.error('В режиме диалога у команды должен быть /триггер');
       return;
     }
 
@@ -175,6 +179,16 @@ export default function CommandsPage() {
               Остальные ключи добавляются в данные этого заказа (поля с теми же именами перезаписываются, остальные не трогаются). Ключ <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">status</code> — тоже служебный: если его значение совпадает с названием одного из статусов (раздел «Настройки» → «Статусы заказов», без учёта регистра), заказ переключится на этот статус и сработают правила пересылки (раздел «Триггеры»), настроенные на него. Оба ключа, <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">order_number</code> и <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">status</code>, служебные и сами в данные заказа не попадают.
             </p>
           </div>
+
+          <div>
+            <h3 className="font-bold text-slate-900 mb-1">8. Диалог с получателем при пересылке</h3>
+            <p>
+              Если промпт используется в правиле пересылки (раздел «Триггеры») как трансформация данных, по умолчанию это разовое сообщение — оно уходит, и на этом всё. Включите галочку «Режим диалога после пересылки» в редактировании команды, если после этого сообщения нужно дождаться ответа получателя (например, поставщик должен подтвердить наличие и назвать цену) — чат перейдёт в режим этой же команды и продолжит работать как обычная многоходовая команда, пока получатель не завершит её тегом <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">{`<RESULT>`}</code> (обычно с ключами <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">order_number</code> и <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">status</code> из пункта 7, чтобы обновить исходный заказ).
+            </p>
+            <p className="mt-2 text-slate-500">
+              В этом режиме у команды обязательно должен быть /триггер — так её можно запустить и вручную, если пересылка не сработала или диалог нужно повторить.
+            </p>
+          </div>
         </div>
       )}
 
@@ -228,6 +242,18 @@ export default function CommandsPage() {
                       />
                     </div>
                   </div>
+                  <div className="flex items-start gap-2 text-sm text-slate-700">
+                    <Toggle
+                      checked={!!editForm.starts_dialog}
+                      onChange={v => setEditForm({ ...editForm, starts_dialog: v })}
+                      aria-label="Режим диалога после пересылки"
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Режим диалога после пересылки — после первого сообщения чат перейдёт в эту команду и будет ждать ответ получателя, пока тот не завершит её тегом{' '}
+                      <code className="bg-slate-100 border border-slate-200 rounded px-1 py-0.5 font-mono text-xs">{`<RESULT>`}</code>. Требует /триггер.
+                    </span>
+                  </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 uppercase ml-1">Промпт (Инструкции для AI)</label>
                     <Textarea
@@ -258,6 +284,9 @@ export default function CommandsPage() {
                       )}
                       {cmd.badge && (
                         <Badge>{cmd.badge}</Badge>
+                      )}
+                      {cmd.starts_dialog && (
+                        <Badge variant="green">диалог</Badge>
                       )}
                       <h3 className="font-semibold text-slate-800">{cmd.description || 'Без описания'}</h3>
                     </div>

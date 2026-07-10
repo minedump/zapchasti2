@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
-import { Plus, RefreshCw, Copy, Check, AlertCircle, MessageCircle, Edit3, Trash2, X } from 'lucide-react';
+import { Plus, RefreshCw, Copy, Check, AlertCircle, MessageCircle, Edit3, Save, Trash2 } from 'lucide-react';
 import { WeChatIcon } from '@/components/icons';
 import { Badge, Button, Input, Skeleton } from '@/components/ui';
 import type { BadgeVariant } from '@/components/ui';
 import { Footer } from '@/components/Footer';
+import { cn } from '@/lib/utils';
 import { toast, Toaster } from 'react-hot-toast';
 
 type AccountStatus = 'pending_qr' | 'scanned' | 'logged_in' | 'expired' | 'error' | 'not_started';
@@ -255,100 +256,110 @@ export default function WeChatPage() {
             accounts.map((acc) => {
               const statusInfo = STATUS_LABELS[acc.status] ?? STATUS_LABELS.not_started;
               const showQr = acc.qr_url && (acc.status === 'pending_qr' || acc.status === 'scanned');
+              const isEditing = editingLabel === acc.bot_name;
               return (
-                <div key={acc.bot_name} className="bg-white rounded-2xl border border-slate-200 hover:border-slate-300 transition-colors p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      {editingLabel === acc.bot_name ? (
-                        <div className="flex items-center gap-2">
+                <div key={acc.bot_name} className={cn(
+                  "bg-white rounded-2xl border transition-all",
+                  isEditing ? "border-blue-500 ring-4 ring-blue-50" : "border-slate-200 hover:border-slate-300"
+                )}>
+                  {isEditing ? (
+                    <div className="p-6 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1.5 block">Имя аккаунта</label>
                           <Input
                             value={labelDraft}
                             onChange={(e) => setLabelDraft(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && saveLabel(acc.bot_name)}
-                            className="h-8 py-1 text-sm w-40"
                             autoFocus
                           />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1.5 block">Бейдж на сообщениях</label>
                           <Input
-                            placeholder="Бейдж"
+                            placeholder="напр. Продажи"
                             value={badgeDraft}
                             onChange={(e) => setBadgeDraft(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && saveLabel(acc.bot_name)}
-                            className="h-8 py-1 text-sm w-32"
                           />
-                          <Button size="sm" className="p-1.5" disabled={savingLabel} onClick={() => saveLabel(acc.bot_name)}>
-                            <Check size={14} />
-                          </Button>
-                          <Button variant="secondary" size="sm" className="p-1.5" onClick={() => setEditingLabel(null)}>
-                            <X size={14} />
-                          </Button>
                         </div>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-800">{acc.label}</span>
-                          {acc.badge && <Badge>{acc.badge}</Badge>}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+                      </div>
+                      <div className="flex justify-end gap-3 pt-2">
+                        <Button variant="secondary" onClick={() => setEditingLabel(null)}>Отмена</Button>
+                        <Button onClick={() => saveLabel(acc.bot_name)} disabled={savingLabel} className="gap-2">
+                          <Save size={18} /> Сохранить
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      {acc.chat_id && (
-                        <Button variant="secondary" className="gap-2" onClick={() => router.push(`/dashboard?chatId=${acc.chat_id}`)}>
-                          <MessageCircle size={16} /> Открыть чат
-                        </Button>
-                      )}
-                      {(acc.status === 'error' || acc.status === 'expired' || acc.status === 'not_started') && (
-                        <Button variant="secondary" className="gap-2" onClick={() => retryAccount(acc.bot_name)}>
-                          <RefreshCw size={16} /> Повторить
-                        </Button>
-                      )}
-                      {editingLabel !== acc.bot_name && (
-                        <Button variant="secondary" className="gap-2" onClick={() => startEditLabel(acc)}>
-                          <Edit3 size={16} /> Редактировать
-                        </Button>
-                      )}
-                      <Button variant="danger" className="gap-2" onClick={() => deleteAccount(acc.bot_name, acc.label)}>
-                        <Trash2 size={16} /> Удалить
-                      </Button>
-                    </div>
-                  </div>
+                  ) : (
+                    <div className="p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-800">{acc.label}</span>
+                            {acc.badge && <Badge>{acc.badge}</Badge>}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          {acc.chat_id && (
+                            <Button variant="secondary" className="gap-2" onClick={() => router.push(`/dashboard?chatId=${acc.chat_id}`)}>
+                              <MessageCircle size={16} /> Открыть чат
+                            </Button>
+                          )}
+                          {(acc.status === 'error' || acc.status === 'expired' || acc.status === 'not_started') && (
+                            <Button variant="secondary" className="gap-2" onClick={() => retryAccount(acc.bot_name)}>
+                              <RefreshCw size={16} /> Повторить
+                            </Button>
+                          )}
+                          <Button variant="secondary" className="gap-2" onClick={() => startEditLabel(acc)}>
+                            <Edit3 size={16} /> Редактировать
+                          </Button>
+                          <Button variant="danger" className="gap-2" onClick={() => deleteAccount(acc.bot_name, acc.label)}>
+                            <Trash2 size={16} /> Удалить
+                          </Button>
+                        </div>
+                      </div>
 
-                  {showQr && (
-                    <div className="flex items-start gap-4 mb-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                      {qrImages[acc.qr_url!] ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={qrImages[acc.qr_url!]} alt="QR для входа" className="rounded-lg border border-slate-200" width={160} height={160} />
-                      ) : (
-                        <Skeleton className="w-40 h-40 rounded-lg" />
+                      {showQr && (
+                        <div className="flex items-start gap-4 mb-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                          {qrImages[acc.qr_url!] ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={qrImages[acc.qr_url!]} alt="QR для входа" className="rounded-lg border border-slate-200" width={160} height={160} />
+                          ) : (
+                            <Skeleton className="w-40 h-40 rounded-lg" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-slate-600 mb-2">
+                              Отсканируйте этим QR-кодом в WeChat тем аккаунтом, который должен отвечать клиентам.
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 truncate">
+                                {acc.qr_url}
+                              </code>
+                              <Button variant="secondary" size="sm" className="p-2 shrink-0" onClick={() => copyLink(acc.qr_url!, acc.bot_name)}>
+                                {copiedFor === acc.bot_name ? <Check size={14} /> : <Copy size={14} />}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
                       )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-slate-600 mb-2">
-                          Отсканируйте этим QR-кодом в WeChat тем аккаунтом, который должен отвечать клиентам.
+
+                      {acc.fatal_error && (
+                        <div className="flex items-start gap-2 text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
+                          <AlertCircle size={14} className="shrink-0 mt-0.5 text-slate-400" />
+                          <span className="break-all">{describeFatalError(acc.fatal_error)}</span>
+                        </div>
+                      )}
+
+                      {acc.last_message_at && (
+                        <p className="text-xs text-slate-400 mt-2">
+                          Последнее сообщение: {new Date(acc.last_message_at).toLocaleString()}
                         </p>
-                        <div className="flex items-center gap-2">
-                          <code className="flex-1 text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 truncate">
-                            {acc.qr_url}
-                          </code>
-                          <Button variant="secondary" size="sm" className="p-2 shrink-0" onClick={() => copyLink(acc.qr_url!, acc.bot_name)}>
-                            {copiedFor === acc.bot_name ? <Check size={14} /> : <Copy size={14} />}
-                          </Button>
-                        </div>
-                      </div>
+                      )}
                     </div>
-                  )}
-
-                  {acc.fatal_error && (
-                    <div className="flex items-start gap-2 text-xs text-slate-500 bg-slate-50 rounded-lg p-3">
-                      <AlertCircle size={14} className="shrink-0 mt-0.5 text-slate-400" />
-                      <span className="break-all">{describeFatalError(acc.fatal_error)}</span>
-                    </div>
-                  )}
-
-                  {acc.last_message_at && (
-                    <p className="text-xs text-slate-400 mt-2">
-                      Последнее сообщение: {new Date(acc.last_message_at).toLocaleString()}
-                    </p>
                   )}
                 </div>
               );
