@@ -32,7 +32,7 @@ function formatOrderData(data: any): string {
  * both are just the order's status_id becoming that value). Matching rules
  * run independently — one failing doesn't block the others.
  */
-export async function runForwardRules(order: { id: string; data: any }, statusId: string): Promise<void> {
+export async function runForwardRules(order: { id: string; data: any; order_number?: number }, statusId: string): Promise<void> {
   const { data: rules } = await supabaseAdmin
     .from('order_forward_rules')
     .select('*, conditions:order_forward_conditions(*)')
@@ -58,6 +58,7 @@ export async function runForwardRules(order: { id: string; data: any }, statusId
       let content: string;
       let badge: string | null = null;
       let isAiGenerated = false;
+      let promptId: string | null = null;
 
       if (rule.prompt_id) {
         const { data: prompt } = await supabaseAdmin
@@ -67,14 +68,15 @@ export async function runForwardRules(order: { id: string; data: any }, statusId
           .maybeSingle();
 
         if (prompt?.prompt_template) {
-          const raw = await runPromptOnData(prompt.prompt_template, order.data);
-          // Пересылка — одноразовая трансформация, а не опрос клиента: тег
-          // <RESULT> тут не нужен, но модель иногда всё равно его вставляет
-          // (например, если промпт скопирован из обычной команды) — вырезаем,
-          // чтобы получателю не улетал сырой JSON в тегах.
+          const raw = await runPromptOnData(prompt.prompt_template, { ...order.data, order_number: order.order_number });
+          // Первое сообщение — одноразовая трансформация (без ожидания
+          // ответа), поэтому тег <RESULT> тут не нужен, но модель иногда
+          // всё равно его вставляет — вырезаем, чтобы получателю не улетал
+          // сырой JSON в тегах.
           content = raw.replace(/<RESULT>[\s\S]*?<\/RESULT>/gi, '').trim() || formatOrderData(order.data);
           badge = prompt.badge ?? null;
           isAiGenerated = true;
+          promptId = rule.prompt_id;
         } else {
           content = formatOrderData(order.data);
         }
@@ -93,6 +95,19 @@ export async function runForwardRules(order: { id: string; data: any }, statusId
         is_ai_generated: isAiGenerated,
         badge,
       }]);
+
+      if (promptId) {
+        // Переводим чат получателя в режим той же команды — так его
+        // следующий ответ пойдёт через обычный диалоговый движок
+        // (askDeepSeek + finishCommandTurn в chatAgent.ts) и сможет
+        // завершиться тегом <RESULT>, который обновит этот же заказ
+        // (см. номер заказа в collected_data — так модель его не забудет).
+        await supabaseAdmin.from('chats').update({
+          status: 'bot_processing',
+          active_command_id: promptId,
+          ai_metadata: { step: 'start', retry_count: 0, collected_data: { order_number: order.order_number } }
+        }).eq('id', targetChat.id);
+      }
 
       await supabaseAdmin.from('order_forward_log').insert([{
         rule_id: rule.id,

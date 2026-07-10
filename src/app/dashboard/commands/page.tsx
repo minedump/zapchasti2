@@ -164,6 +164,17 @@ export default function CommandsPage() {
               Когда активной команды нет, бот отвечает по промпту из раздела «Настройки» → «Промпт ассистента», дополняя его всеми активными статьями из «Базы знаний».
             </p>
           </div>
+
+          <div>
+            <h3 className="font-bold text-slate-900 mb-1">7. Изменение уже существующего заказа</h3>
+            <p>
+              Если в JSON внутри тега есть ключ <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">order_number</code> с номером заказа (тем самым #N из карточки заказа), новый заказ не создаётся — вместо этого обновляется уже существующий:
+            </p>
+            <pre className="mt-2 bg-white border border-slate-200 rounded-lg p-3 text-xs font-mono whitespace-pre-wrap">{`<RESULT>{ "order_number": 4, "status": "Согласован", "Наличие": true, "Цена": 9500 }</RESULT>`}</pre>
+            <p className="mt-2 text-slate-500">
+              Остальные ключи добавляются в данные этого заказа (поля с теми же именами перезаписываются, остальные не трогаются). Ключ <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">status</code> — тоже служебный: если его значение совпадает с названием одного из статусов (раздел «Настройки» → «Статусы заказов», без учёта регистра), заказ переключится на этот статус и сработают правила пересылки (раздел «Триггеры»), настроенные на него. Оба ключа, <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">order_number</code> и <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">status</code>, служебные и сами в данные заказа не попадают.
+            </p>
+          </div>
         </div>
       )}
 

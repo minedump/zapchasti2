@@ -121,20 +121,71 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
   }
 
   let createdOrder: any = null;
-  if (finalJson) {
-    const { data: statusData } = await supabaseAdmin
-      .from('order_statuses')
-      .select('id')
-      .eq('name', 'Новый')
-      .single();
+  let updatedOrder: any = null;
+  let updatedOrderNewStatusId: string | null = null;
 
-    const { data: orderRow } = await supabaseAdmin.from('orders').insert([{
-      chat_id: chatData.id,
-      data: finalJson,
-      status_id: statusData?.id,
-      command_id: chatData.active_command_id ?? null
-    }]).select().maybeSingle();
-    createdOrder = orderRow;
+  if (finalJson && typeof finalJson === 'object') {
+    const orderNumber = finalJson.order_number;
+
+    if (orderNumber !== undefined && orderNumber !== null) {
+      // order_number — служебный ключ: команда не создаёт новый заказ, а
+      // дополняет уже существующий (например, ответ поставщика на пересылку).
+      // См. "Как писать промпты" на странице Команд AI.
+      const { data: existingOrder } = await supabaseAdmin
+        .from('orders')
+        .select('*')
+        .eq('order_number', orderNumber)
+        .maybeSingle();
+
+      if (existingOrder) {
+        const extraData: Record<string, any> = { ...finalJson };
+        delete extraData.order_number;
+        delete extraData.status;
+
+        const updates: Record<string, any> = {
+          data: { ...existingOrder.data, ...extraData },
+        };
+
+        // status — тоже служебный ключ, меняет статус заказа только если
+        // совпадает (без учёта регистра) с названием существующего статуса —
+        // это же условие срабатывания правил пересылки ниже.
+        if (finalJson.status) {
+          const { data: statusRow } = await supabaseAdmin
+            .from('order_statuses')
+            .select('id')
+            .ilike('name', String(finalJson.status).trim())
+            .maybeSingle();
+          if (statusRow) {
+            updates.status_id = statusRow.id;
+            updatedOrderNewStatusId = statusRow.id;
+          }
+        }
+
+        const { data: orderRow } = await supabaseAdmin
+          .from('orders')
+          .update(updates)
+          .eq('id', existingOrder.id)
+          .select()
+          .maybeSingle();
+        updatedOrder = orderRow;
+      } else {
+        console.error(`finishCommandTurn: заказ №${orderNumber} не найден для обновления`);
+      }
+    } else {
+      const { data: statusData } = await supabaseAdmin
+        .from('order_statuses')
+        .select('id')
+        .eq('name', 'Новый')
+        .single();
+
+      const { data: orderRow } = await supabaseAdmin.from('orders').insert([{
+        chat_id: chatData.id,
+        data: finalJson,
+        status_id: statusData?.id,
+        command_id: chatData.active_command_id ?? null
+      }]).select().maybeSingle();
+      createdOrder = orderRow;
+    }
   }
 
   await supabaseAdmin.from('chats').update({
@@ -143,9 +194,11 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
     ai_metadata: { collected_data: finalJson || {} }
   }).eq('id', chatData.id);
 
-  const suffix = finalJson
-    ? "\n\n✅ Данные собраны. Сейчас подключится оператор."
-    : "\n\n✅ Готово. Сейчас подключится оператор.";
+  const suffix = updatedOrder
+    ? `\n\n✅ Заказ №${updatedOrder.order_number} обновлён.`
+    : createdOrder
+      ? "\n\n✅ Данные собраны. Сейчас подключится оператор."
+      : "\n\n✅ Готово. Сейчас подключится оператор.";
   const bodyText = cleanMessage || "Готово.";
   await sender.send(withBadge(bodyText + suffix, badge));
 
@@ -160,6 +213,9 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
   if (createdOrder) {
     const { runForwardRules } = await import('@/lib/orderForwarding');
     await runForwardRules(createdOrder, createdOrder.status_id);
+  } else if (updatedOrder && updatedOrderNewStatusId) {
+    const { runForwardRules } = await import('@/lib/orderForwarding');
+    await runForwardRules(updatedOrder, updatedOrderNewStatusId);
   }
 }
 
