@@ -36,7 +36,7 @@ export default function CommandsPage() {
 
   const handleEdit = (cmd: any) => {
     setEditingId(cmd.id);
-    setEditForm({ ...cmd, channel: cmd.channel ?? '', badge: cmd.badge ?? '' });
+    setEditForm({ ...cmd, command: cmd.command ?? '', channel: cmd.channel ?? '', badge: cmd.badge ?? '' });
   };
 
   const handleSave = async () => {
