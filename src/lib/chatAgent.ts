@@ -22,6 +22,17 @@ async function getSetting(key: string): Promise<string | null> {
   return data?.value ?? null;
 }
 
+// ── <RESULT> — единая точка разбора/вырезания тега ───────────────────────────
+// Раньше регекс дублировался здесь и в orderForwarding.ts с разными флагами
+// (i против gi) — теперь оба используют эти хелперы.
+
+const RESULT_TAG = /<RESULT>([\s\S]*?)<\/RESULT>/i;
+
+/** Removes every <RESULT>...</RESULT> block from an AI reply. */
+export function stripResultTags(text: string): string {
+  return text.replace(/<RESULT>[\s\S]*?<\/RESULT>/gi, '').trim();
+}
+
 /** Renders a chat's orders as text for injection into an AI prompt (used by
  * the command flag "получает заказы чата" and by message templates). */
 export function formatOrdersForPrompt(orders: Array<{ order_number: number; data: any; order_statuses?: { name: string } | null }>): string {
@@ -68,7 +79,7 @@ export async function findOrCreateChat(opts: {
       // (см. processIncomingMessage) переводит его в bot_processing.
       status: 'operator_needed',
       avatar_color: pickAvatarColor(String(matchValue)),
-      ai_metadata: { step: 'start', retry_count: 0, collected_data: {} },
+      ai_metadata: { collected_data: {} },
       ...extraFields,
     }])
     .select()
@@ -81,11 +92,10 @@ export async function findOrCreateChat(opts: {
   return created;
 }
 
-// Системные уведомления (например, блокировка повторной команды) — тоже пишем в messages,
-// чтобы оператор видел их в CRM, а не только клиент в мессенджере.
+// Не-AI сообщение бота (системное уведомление или "надо подумать") — тоже пишем
+// в messages, чтобы оператор видел его в CRM, а не только клиент в мессенджере.
 // is_from_bot: true + is_ai_generated: false отличает их от настоящих AI-ответов.
-async function sendSystemMessage(dbChatId: string, sender: ChatSender, text: string) {
-  const badge = await getSetting('system_message_badge');
+async function sendServiceMessage(dbChatId: string, sender: ChatSender, text: string, badge: string | null) {
   const finalText = withBadge(text, badge);
   await sender.send(finalText);
   await supabaseAdmin.from('messages').insert([{
@@ -97,6 +107,11 @@ async function sendSystemMessage(dbChatId: string, sender: ChatSender, text: str
   }]);
 }
 
+async function sendSystemMessage(dbChatId: string, sender: ChatSender, text: string) {
+  const badge = await getSetting('system_message_badge');
+  await sendServiceMessage(dbChatId, sender, text, badge);
+}
+
 // Разбирает ответ AI на предмет тега <RESULT>...</RESULT>, которым завершается команда.
 // Поддерживает два варианта:
 //  - <RESULT>{ ...json... }</RESULT> — создаёт заказ с этими данными и передаёт чат оператору;
@@ -104,8 +119,11 @@ async function sendSystemMessage(dbChatId: string, sender: ChatSender, text: str
 // Используется и при первом ответе на запуск команды, и при последующих репликах —
 // раньше это распознавалось только во втором случае, из-за чего команды, завершающиеся
 // сразу первым сообщением (без сбора данных), зависали с "сырыми" тегами в чате.
-async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: string, badge: string | null) {
-  const resultMatch = aiResponse.match(/<RESULT>([\s\S]*?)<\/RESULT>/i);
+// `commandId` — команда, от имени которой идёт этот ход (привязывается к
+// созданному заказу); передаётся явно, потому что chatData в момент старта
+// команды ещё содержит старый active_command_id.
+async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: string, badge: string | null, commandId: string | null) {
+  const resultMatch = aiResponse.match(RESULT_TAG);
 
   if (!resultMatch) {
     const finalText = withBadge(aiResponse, badge);
@@ -121,7 +139,7 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
   }
 
   const jsonString = resultMatch[1].trim();
-  const cleanMessage = aiResponse.replace(/<RESULT>[\s\S]*?<\/RESULT>/i, "").trim();
+  const cleanMessage = stripResultTags(aiResponse);
   let finalJson: any = null;
 
   if (jsonString) {
@@ -214,7 +232,7 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
         chat_id: chatData.id,
         data: orderData,
         status_id: statusId,
-        command_id: chatData.active_command_id ?? null
+        command_id: commandId
       }]).select().maybeSingle();
       createdOrder = orderRow;
     }
@@ -251,6 +269,8 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
   }
 }
 
+// ── Контекст промпта ─────────────────────────────────────────────────────────
+
 // Приклеивает к промпту список заказов клиента этого чата, если команда
 // включила флаг "Получать заказы клиента в этом чате" (bot_commands.receives_chat_orders).
 async function withOrdersContext(promptTemplate: string, chatId: string, receivesChatOrders: boolean): Promise<string> {
@@ -263,48 +283,141 @@ async function withOrdersContext(promptTemplate: string, chatId: string, receive
   return `${promptTemplate}\n\nЗАКАЗЫ КЛИЕНТА В ЭТОМ ЧАТЕ:\n${formatOrdersForPrompt((orders ?? []) as any)}`;
 }
 
-async function callDeepSeek(systemPrompt: string, messages: Array<{ role: string; content: string }>): Promise<string> {
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [{ role: 'system', content: systemPrompt }, ...messages]
-    })
-  });
+/**
+ * Appends knowledge-base articles to a prompt according to the command's
+ * knowledge_mode: 'all' — every active article, 'selected' — only the ones
+ * linked via command_knowledge, 'none' — prompt unchanged.
+ */
+export async function withKnowledgeContext(promptTemplate: string, command: { id: string; knowledge_mode?: string | null }): Promise<string> {
+  const mode = command.knowledge_mode ?? 'none';
+  if (mode !== 'all' && mode !== 'selected') return promptTemplate;
 
-  const data = await response.json();
-  return data.choices[0].message.content;
+  let query = supabaseAdmin.from('knowledge_base').select('title, content').eq('is_active', true);
+  if (mode === 'selected') {
+    const { data: links } = await supabaseAdmin
+      .from('command_knowledge')
+      .select('knowledge_id')
+      .eq('command_id', command.id);
+    const ids = (links ?? []).map(l => l.knowledge_id);
+    if (!ids.length) return promptTemplate;
+    query = query.in('id', ids);
+  }
+
+  const { data: knowledge } = await query;
+  if (!knowledge?.length) return promptTemplate;
+
+  const articles = knowledge.map(k => `СТАТЬЯ: ${k.title}\n${k.content}`).join('\n\n');
+  return `${promptTemplate}\n\nБАЗА ЗНАНИЙ КОМПАНИИ:\n${articles}`;
 }
 
-async function askDeepSeek(text: string, history: any[], currentState: any, retryCount: number, promptTemplate: string) {
-  const systemPrompt = `
-    ${promptTemplate}
-
-    ТЕКУЩИЕ ДАННЫЕ: ${JSON.stringify(currentState)}
-    ПОПЫТКА №${retryCount + 1} ДЛЯ ТЕКУЩЕГО ПУНКТА.
-  `;
-
-  return callDeepSeek(systemPrompt, history.map(m => ({ role: m.is_from_bot ? 'assistant' : 'user', content: m.content })));
+// Собирает полный системный промпт команды: её шаблон + статьи базы знаний
+// (по knowledge_mode) + заказы чата (по receives_chat_orders).
+async function buildCommandPrompt(command: any, chatId: string): Promise<string> {
+  let prompt = command.prompt_template;
+  prompt = await withKnowledgeContext(prompt, command);
+  prompt = await withOrdersContext(prompt, chatId, !!command.receives_chat_orders);
+  return prompt;
 }
 
 /**
- * One-shot prompt run over arbitrary data (no multi-turn history/retry
- * scaffolding) — used by order-forward rules to transform an order's JSON
- * before it's sent to the target chat.
+ * The command marked "по умолчанию" for this channel (channel-specific row
+ * wins over the channel-agnostic one). Replaces the old
+ * default_assistant_prompt/badge keys in bot_settings.
  */
-export async function runPromptOnData(promptTemplate: string, data: unknown): Promise<string> {
-  return callDeepSeek(promptTemplate, [{ role: 'user', content: JSON.stringify(data) }]);
+export async function getDefaultCommand(channel: string): Promise<any | null> {
+  const { data } = await supabaseAdmin
+    .from('bot_commands')
+    .select('*')
+    .eq('is_default', true)
+    .eq('is_active', true)
+    .or(`channel.is.null,channel.eq.${channel}`);
+  return data?.find(c => c.channel === channel) ?? data?.find(c => !c.channel) ?? null;
+}
+
+// ── Вызовы DeepSeek + журнал ─────────────────────────────────────────────────
+
+export interface AiCallMeta {
+  chatId?: string | null;
+  commandId?: string | null;
+  source: 'command' | 'default' | 'template' | 'forward';
+}
+
+// Промпт/ответ в журнале усечены, чтобы таблица не разрасталась от больших
+// баз знаний в контексте.
+const AI_LOG_TEXT_LIMIT = 4000;
+
+async function logAiCall(meta: AiCallMeta, prompt: string, response: string | null, durationMs: number, error: unknown) {
+  try {
+    await supabaseAdmin.from('ai_call_log').insert([{
+      chat_id: meta.chatId ?? null,
+      command_id: meta.commandId ?? null,
+      source: meta.source,
+      duration_ms: durationMs,
+      prompt: prompt.slice(0, AI_LOG_TEXT_LIMIT),
+      response: response?.slice(0, AI_LOG_TEXT_LIMIT) ?? null,
+      status: error ? 'error' : 'ok',
+      error_message: error ? (error instanceof Error ? error.message : String(error)) : null,
+    }]);
+  } catch (e) {
+    console.error('logAiCall failed:', e);
+  }
+}
+
+async function callDeepSeek(systemPrompt: string, messages: Array<{ role: string; content: string }>, meta: AiCallMeta): Promise<string> {
+  const startedAt = Date.now();
+  try {
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{ role: 'system', content: systemPrompt }, ...messages]
+      })
+    });
+
+    const data = await response.json();
+    const content = data?.choices?.[0]?.message?.content;
+    if (typeof content !== 'string') {
+      throw new Error(`DeepSeek: неожиданный ответ — ${JSON.stringify(data).slice(0, 300)}`);
+    }
+    await logAiCall(meta, systemPrompt, content, Date.now() - startedAt, null);
+    return content;
+  } catch (err) {
+    await logAiCall(meta, systemPrompt, null, Date.now() - startedAt, err);
+    throw err;
+  }
+}
+
+// Многоходовой вызов: системный промпт + история чата. collectedData
+// подставляется блоком ТЕКУЩИЕ ДАННЫЕ только если непуст — единственный
+// реальный источник сейчас — пересылка поставщику, которая кладёт туда
+// order_number исходного заказа (см. orderForwarding.ts).
+async function askDeepSeek(history: any[], systemPromptBase: string, collectedData: Record<string, any>, meta: AiCallMeta) {
+  const hasData = collectedData && Object.keys(collectedData).length > 0;
+  const systemPrompt = hasData
+    ? `${systemPromptBase}\n\nТЕКУЩИЕ ДАННЫЕ: ${JSON.stringify(collectedData)}`
+    : systemPromptBase;
+
+  return callDeepSeek(systemPrompt, history.map(m => ({ role: m.is_from_bot ? 'assistant' : 'user', content: m.content })), meta);
+}
+
+/**
+ * One-shot prompt run over arbitrary data (no multi-turn history) — used by
+ * order-forward rules to transform an order's JSON before it's sent to the
+ * target chat.
+ */
+export async function runPromptOnData(promptTemplate: string, data: unknown, meta: AiCallMeta): Promise<string> {
+  return callDeepSeek(promptTemplate, [{ role: 'user', content: JSON.stringify(data) }], meta);
 }
 
 /**
  * Full turn for one incoming customer message, independent of channel:
  * persists it, applies command-locking / command-matching, runs the AI
- * agent (either the active command's prompt or the default assistant +
- * knowledge base), and delivers the reply via `sender`.
+ * agent (either the active command's prompt or the default command), and
+ * delivers the reply via `sender`.
  */
 export async function processIncomingMessage(chatData: any, text: string, sender: ChatSender): Promise<void> {
   // 1. Сохранить входящее сообщение
@@ -338,23 +451,21 @@ export async function processIncomingMessage(chatData: any, text: string, sender
       await supabaseAdmin.from('chats').update({
         status: 'bot_processing',
         active_command_id: commandData.id,
-        ai_metadata: {
-          step: 'start',
-          retry_count: 0,
-          collected_data: {}
-        }
+        ai_metadata: { collected_data: {} }
       }).eq('id', chatData.id);
 
-      const startPrompt = await withOrdersContext(commandData.prompt_template, chatData.id, commandData.receives_chat_orders);
-      const aiResponse = await askDeepSeek(
-        "Начни опрос",
-        [],
-        {},
-        0,
-        startPrompt
-      );
+      if (commandData.thinking_message) {
+        await sendServiceMessage(chatData.id, sender, commandData.thinking_message, commandData.badge ?? null);
+      }
 
-      await finishCommandTurn(chatData, sender, aiResponse, commandData.badge ?? null);
+      const startPrompt = await buildCommandPrompt(commandData, chatData.id);
+      const aiResponse = await askDeepSeek([], startPrompt, {}, {
+        chatId: chatData.id,
+        commandId: commandData.id,
+        source: 'command',
+      });
+
+      await finishCommandTurn(chatData, sender, aiResponse, commandData.badge ?? null, commandData.id);
       return;
     }
   }
@@ -362,46 +473,37 @@ export async function processIncomingMessage(chatData: any, text: string, sender
   // 3. Если работает бот
   if (chatData.status === 'bot_processing') {
     const metadata = chatData.ai_metadata || {};
-    let currentPrompt: string | undefined;
-    let badge: string | null = null;
 
     // Если есть активная команда, промпт и бейдж берём из bot_commands напрямую —
-    // так изменения в разделе "Команды AI" применяются сразу, а не только к новым опросам
+    // так изменения в разделе "Команды AI" применяются сразу, а не только к новым
+    // опросам. Иначе (режим ожидания или команда была удалена) работает команда,
+    // помеченная "по умолчанию".
+    let commandForTurn: any = null;
     if (chatData.active_command_id) {
       const { data: activeCommand } = await supabaseAdmin
         .from('bot_commands')
-        .select('prompt_template, badge, receives_chat_orders')
+        .select('*')
         .eq('id', chatData.active_command_id)
         .maybeSingle();
-      currentPrompt = activeCommand?.prompt_template
-        ? await withOrdersContext(activeCommand.prompt_template, chatData.id, activeCommand.receives_chat_orders)
-        : undefined;
-      badge = activeCommand?.badge ?? null;
+      commandForTurn = activeCommand;
     }
+    const isDefaultTurn = !commandForTurn;
+    if (isDefaultTurn) commandForTurn = await getDefaultCommand(chatData.channel);
 
-    // Если промпта нет (дефолтный режим или команда была удалена), берем его из настроек и добавляем знания
-    if (!currentPrompt) {
-      const { data: settings } = await supabaseAdmin
-        .from('bot_settings')
-        .select('key, value')
-        .in('key', ['default_assistant_prompt', 'default_assistant_badge']);
+    let currentPrompt: string;
+    let badge: string | null = null;
+    let commandId: string | null = null;
 
-      const settingsByKey = new Map((settings ?? []).map(s => [s.key, s.value]));
-      badge = settingsByKey.get('default_assistant_badge') ?? null;
-
-      const { data: knowledge } = await supabaseAdmin
-        .from('knowledge_base')
-        .select('title, content')
-        .eq('is_active', true);
-
-      const knowledgeContext = knowledge?.map(k => `СТАТЬЯ: ${k.title}\n${k.content}`).join('\n\n') || '';
-
-      currentPrompt = `
-        ${settingsByKey.get('default_assistant_prompt') || "Ты помощник."}
-
-        БАЗА ЗНАНИЙ КОМПАНИИ:
-        ${knowledgeContext}
-      `;
+    if (commandForTurn) {
+      if (commandForTurn.thinking_message) {
+        await sendServiceMessage(chatData.id, sender, commandForTurn.thinking_message, commandForTurn.badge ?? null);
+      }
+      currentPrompt = await buildCommandPrompt(commandForTurn, chatData.id);
+      badge = commandForTurn.badge ?? null;
+      commandId = commandForTurn.id;
+    } else {
+      // Дефолтная команда не настроена (или выключена) — минимальный запасной промпт.
+      currentPrompt = 'Ты помощник.';
     }
 
     const { data: history } = await supabaseAdmin
@@ -411,14 +513,13 @@ export async function processIncomingMessage(chatData: any, text: string, sender
       .order('created_at', { ascending: true });
 
     const aiResponse = await askDeepSeek(
-      text,
       history || [],
+      currentPrompt,
       metadata.collected_data || {},
-      metadata.retry_count || 0,
-      currentPrompt
+      { chatId: chatData.id, commandId, source: isDefaultTurn ? 'default' : 'command' }
     );
 
-    await finishCommandTurn(chatData, sender, aiResponse, badge);
+    await finishCommandTurn(chatData, sender, aiResponse, badge, commandId);
   }
 }
 
@@ -429,7 +530,11 @@ export async function processIncomingMessage(chatData: any, text: string, sender
  * forward-rule triggering and dialog continuation (if the reply has no tag
  * and the chat was left with an active command) all behave identically.
  */
-export async function runMessageTemplate(chatData: any, systemPrompt: string, sender: ChatSender, badge: string | null): Promise<void> {
-  const aiResponse = await askDeepSeek("Составь ответ клиенту.", [], {}, 0, systemPrompt);
-  await finishCommandTurn(chatData, sender, aiResponse, badge);
+export async function runMessageTemplate(chatData: any, systemPrompt: string, sender: ChatSender, badge: string | null, commandId: string | null): Promise<void> {
+  const aiResponse = await askDeepSeek([], systemPrompt, {}, {
+    chatId: chatData.id,
+    commandId,
+    source: 'template',
+  });
+  await finishCommandTurn(chatData, sender, aiResponse, badge, commandId);
 }

@@ -2,17 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Trash2, Palette, Tag, BookOpen, MessageSquare, Save, X, Check, Tags } from 'lucide-react';
-import { Badge, Button, Input, Textarea, Skeleton } from '@/components/ui';
+import { Plus, Trash2, Palette, Tag, Save, X, Check, Tags } from 'lucide-react';
+import { Badge, Button, Input, Skeleton } from '@/components/ui';
 import { Footer } from '@/components/Footer';
 import { toast, Toaster } from 'react-hot-toast';
 
 export default function SettingsPage() {
   const [statuses, setStatuses] = useState<any[]>([]);
   const [tags, setTags] = useState<any[]>([]);
-  const [knowledge, setKnowledge] = useState<any[]>([]);
-  const [botPrompt, setBotPrompt] = useState('');
-  const [defaultAssistantBadge, setDefaultAssistantBadge] = useState('');
   const [systemMessageBadge, setSystemMessageBadge] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -21,45 +18,30 @@ export default function SettingsPage() {
   const [newStatusColor, setNewStatusColor] = useState('#94a3b8');
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
-  const [newArticleTitle, setNewArticleTitle] = useState('');
-  const [newArticleContent, setNewArticleContent] = useState('');
   const [showAddStatus, setShowAddStatus] = useState(false);
   const [showAddTag, setShowAddTag] = useState(false);
-  const [showAddArticle, setShowAddArticle] = useState(false);
 
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     setLoading(true);
-    const [{ data: sData }, { data: tData }, { data: kData }, { data: settingsData }] = await Promise.all([
+    const [{ data: sData }, { data: tData }, { data: settingsData }] = await Promise.all([
       supabase.from('order_statuses').select('*').order('created_at'),
       supabase.from('tags').select('*').order('created_at'),
-      supabase.from('knowledge_base').select('*').order('created_at', { ascending: false }),
-      supabase.from('bot_settings').select('key, value').in('key', ['default_assistant_prompt', 'default_assistant_badge', 'system_message_badge']),
+      supabase.from('bot_settings').select('key, value').in('key', ['system_message_badge']),
     ]);
     if (sData) setStatuses(sData);
     if (tData) setTags(tData);
-    if (kData) setKnowledge(kData);
     if (settingsData) {
       const byKey = new Map(settingsData.map(s => [s.key, s.value]));
-      setBotPrompt(byKey.get('default_assistant_prompt') ?? '');
-      setDefaultAssistantBadge(byKey.get('default_assistant_badge') ?? '');
       setSystemMessageBadge(byKey.get('system_message_badge') ?? '');
     }
     setLoading(false);
   };
 
-  const savePrompt = async () => {
-    await supabase.from('bot_settings').upsert({ key: 'default_assistant_prompt', value: botPrompt });
-    toast.success('Промпт сохранен');
-  };
-
   const saveBadges = async () => {
-    await Promise.all([
-      supabase.from('bot_settings').upsert({ key: 'default_assistant_badge', value: defaultAssistantBadge }),
-      supabase.from('bot_settings').upsert({ key: 'system_message_badge', value: systemMessageBadge }),
-    ]);
-    toast.success('Бейджи сохранены');
+    await supabase.from('bot_settings').upsert({ key: 'system_message_badge', value: systemMessageBadge });
+    toast.success('Бейдж сохранен');
   };
 
   const addStatus = async () => {
@@ -74,17 +56,6 @@ export default function SettingsPage() {
     const { error } = await supabase.from('tags').insert([{ name: newTagName.trim(), color: newTagColor }]);
     if (error) toast.error('Ошибка: метка уже существует');
     else { toast.success('Метка добавлена'); setNewTagName(''); setNewTagColor('#3b82f6'); setShowAddTag(false); fetchData(); }
-  };
-
-  const addArticle = async () => {
-    if (!newArticleTitle.trim()) return;
-    const { error } = await supabase.from('knowledge_base').insert([{ title: newArticleTitle.trim(), content: newArticleContent }]);
-    if (error) toast.error('Ошибка при добавлении');
-    else { toast.success('Статья добавлена'); setNewArticleTitle(''); setNewArticleContent(''); setShowAddArticle(false); fetchData(); }
-  };
-
-  const updateKnowledge = async (id: string, updates: any) => {
-    await supabase.from('knowledge_base').update(updates).eq('id', id);
   };
 
   const deleteItem = async (table: string, id: string, isSystem: boolean) => {
@@ -106,7 +77,7 @@ export default function SettingsPage() {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Настройки</h1>
-          <p className="text-slate-500 mt-1">Промпт бота, база знаний и справочники</p>
+          <p className="text-slate-500 mt-1">Справочники и системные настройки</p>
         </div>
       </div>
 
@@ -134,36 +105,16 @@ export default function SettingsPage() {
       ) : (
       <div className="space-y-8">
 
-        {/* === Промпт ассистента === */}
-        <Section
-          icon={<MessageSquare size={18} />}
-          title="Промпт ассистента"
-          description="Инструкции для бота в режиме ожидания"
-          action={<Button onClick={savePrompt} className="gap-2"><Save size={16} /> Сохранить</Button>}
-        >
-          <Textarea
-            className="min-h-[180px] bg-slate-50 focus-visible:bg-white leading-relaxed resize-none"
-            value={botPrompt}
-            onChange={e => setBotPrompt(e.target.value)}
-          />
-        </Section>
-
-        {/* === Бейджи по умолчанию === */}
+        {/* === Бейдж системных сообщений === */}
         <Section
           icon={<Tags size={18} />}
-          title="Бейджи по умолчанию"
-          description="Метки на сообщениях без своей команды/аккаунта"
+          title="Бейдж системных сообщений"
+          description="Метка на служебных уведомлениях бота (промпт и бейдж ассистента настраиваются в разделе «Команды AI»)"
           action={<Button onClick={saveBadges} className="gap-2"><Save size={16} /> Сохранить</Button>}
         >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase ml-1">Ответы агента по умолчанию</label>
-              <Input value={defaultAssistantBadge} onChange={e => setDefaultAssistantBadge(e.target.value)} placeholder="напр. AI" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-500 uppercase ml-1">Системные сообщения</label>
-              <Input value={systemMessageBadge} onChange={e => setSystemMessageBadge(e.target.value)} placeholder="напр. Система" />
-            </div>
+          <div className="space-y-1.5 max-w-sm">
+            <label className="text-xs font-bold text-slate-500 uppercase ml-1">Системные сообщения</label>
+            <Input value={systemMessageBadge} onChange={e => setSystemMessageBadge(e.target.value)} placeholder="напр. Система" />
           </div>
         </Section>
 
@@ -239,68 +190,6 @@ export default function SettingsPage() {
               <p className="text-sm text-slate-400 py-2">Меток пока нет</p>
             )}
           </div>
-        </Section>
-
-        {/* === База знаний === */}
-        <Section
-          icon={<BookOpen size={18} />}
-          title="База знаний"
-          description="Статьи, которые бот использует при ответах"
-          action={
-            <Button variant="secondary" className="gap-2" onClick={() => setShowAddArticle(v => !v)}>
-              <Plus size={16} /> Добавить статью
-            </Button>
-          }
-        >
-          {showAddArticle && (
-            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
-              <Input
-                placeholder="Заголовок статьи"
-                value={newArticleTitle}
-                onChange={e => setNewArticleTitle(e.target.value)}
-              />
-              <Textarea
-                placeholder="Содержание статьи..."
-                value={newArticleContent}
-                onChange={e => setNewArticleContent(e.target.value)}
-                className="min-h-[100px] resize-none"
-              />
-              <div className="flex gap-2 justify-end">
-                <Button variant="secondary" className="gap-2" onClick={() => { setShowAddArticle(false); setNewArticleTitle(''); setNewArticleContent(''); }}>
-                  <X size={16} /> Отмена
-                </Button>
-                <Button className="gap-2" onClick={addArticle}>
-                  <Check size={16} /> Добавить
-                </Button>
-              </div>
-            </div>
-          )}
-          {(knowledge.length > 0 || !showAddArticle) && (
-            <div className="space-y-3">
-              {knowledge.map(k => (
-                <div key={k.id} className="p-4 bg-slate-50 border border-slate-100 rounded-xl space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <Input
-                      defaultValue={k.title}
-                      onBlur={e => updateKnowledge(k.id, { title: e.target.value })}
-                      className="font-semibold bg-white"
-                    />
-                    <Button variant="danger" size="sm" className="shrink-0 p-2" onClick={() => deleteItem('knowledge_base', k.id, false)}>
-                      <Trash2 size={16} />
-                    </Button>
-                  </div>
-                  <Textarea
-                    defaultValue={k.content}
-                    onBlur={e => updateKnowledge(k.id, { content: e.target.value })}
-                    className="min-h-[100px] resize-none"
-                  />
-                </div>
-              ))}
-              {knowledge.length === 0 && !showAddArticle && (
-                <p className="text-sm text-slate-400 py-2">Статей пока нет</p>
-              )}
-            </div>
-          )}
         </Section>
 
       </div>

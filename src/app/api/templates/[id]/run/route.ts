@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { runMessageTemplate, formatOrdersForPrompt } from '@/lib/chatAgent';
+import { runMessageTemplate, formatOrdersForPrompt, withKnowledgeContext, getDefaultCommand } from '@/lib/chatAgent';
 import { getSenderForChat } from '@/lib/channelSenders';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -31,11 +31,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: 'Чат занят активной командой' }, { status: 409 });
   }
 
-  let command: { id: string; prompt_template: string; badge: string | null } | null = null;
+  let command: { id: string; prompt_template: string; badge: string | null; knowledge_mode?: string | null } | null = null;
   if (template.command_id) {
     const { data } = await supabaseAdmin
       .from('bot_commands')
-      .select('id, prompt_template, badge')
+      .select('id, prompt_template, badge, knowledge_mode')
       .eq('id', template.command_id)
       .maybeSingle();
     command = data;
@@ -47,8 +47,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .eq('chat_id', chatId)
     .order('created_at', { ascending: true });
 
+  // Промпт команды идёт с её статьями базы знаний — так же, как при обычном
+  // запуске команды через processIncomingMessage.
+  const commandPrompt = command ? await withKnowledgeContext(command.prompt_template, command) : null;
+
   const systemPrompt = [
-    command?.prompt_template,
+    commandPrompt,
     `ЗАДАЧА: ${template.context}`,
     extraAnswer ? `УТОЧНЕНИЕ ОПЕРАТОРА (${template.extra_question}): ${extraAnswer}` : null,
     `ЗАКАЗЫ КЛИЕНТА В ЭТОМ ЧАТЕ:\n${formatOrdersForPrompt((orders ?? []) as any)}`,
@@ -56,12 +60,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   let badge = command?.badge ?? null;
   if (!badge) {
-    const { data: badgeSetting } = await supabaseAdmin
-      .from('bot_settings')
-      .select('value')
-      .eq('key', 'default_assistant_badge')
-      .maybeSingle();
-    badge = badgeSetting?.value ?? null;
+    const defaultCommand = await getDefaultCommand(chat.channel);
+    badge = defaultCommand?.badge ?? null;
   }
 
   let chatForRun = chat;
@@ -76,7 +76,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const sender = getSenderForChat(chatForRun);
-  await runMessageTemplate(chatForRun, systemPrompt, sender, badge);
+  await runMessageTemplate(chatForRun, systemPrompt, sender, badge, command?.id ?? null);
 
   return NextResponse.json({ ok: true });
 }

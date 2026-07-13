@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { runPromptOnData } from '@/lib/chatAgent';
+import { runPromptOnData, stripResultTags } from '@/lib/chatAgent';
 import { getSenderForChat } from '@/lib/channelSenders';
 import { withBadge } from '@/lib/badge';
 
@@ -68,12 +68,16 @@ export async function runForwardRules(order: { id: string; data: any; order_numb
           .maybeSingle();
 
         if (prompt?.prompt_template) {
-          const raw = await runPromptOnData(prompt.prompt_template, { ...order.data, order_number: order.order_number });
+          const raw = await runPromptOnData(
+            prompt.prompt_template,
+            { ...order.data, order_number: order.order_number },
+            { chatId: targetChat.id, commandId: rule.prompt_id, source: 'forward' }
+          );
           // Первое сообщение — всегда одноразовая трансформация текста, тег
           // <RESULT> тут не нужен, но модель иногда всё равно его вставляет
           // (например, если промпт написан в режиме диалога) — вырезаем,
           // чтобы получателю не улетал сырой JSON в тегах.
-          content = raw.replace(/<RESULT>[\s\S]*?<\/RESULT>/gi, '').trim() || formatOrderData(order.data);
+          content = stripResultTags(raw) || formatOrderData(order.data);
           badge = prompt.badge ?? null;
           isAiGenerated = true;
           // Продолжать диалогом (ждать ответ и завершиться через <RESULT>)
@@ -109,7 +113,7 @@ export async function runForwardRules(order: { id: string; data: any; order_numb
         await supabaseAdmin.from('chats').update({
           status: 'bot_processing',
           active_command_id: promptId,
-          ai_metadata: { step: 'start', retry_count: 0, collected_data: { order_number: order.order_number } }
+          ai_metadata: { collected_data: { order_number: order.order_number } }
         }).eq('id', targetChat.id);
       }
 
