@@ -28,7 +28,7 @@ export default function CommandsPage() {
 
   const handleAdd = () => {
     const newId = 'new-' + Date.now();
-    const newCmd = { id: newId, command: '', description: '', prompt_template: '', channel: null, badge: '', is_active: true, starts_dialog: false, isNew: true };
+    const newCmd = { id: newId, command: '', description: '', prompt_template: '', channel: null, badge: '', is_active: true, starts_dialog: false, receives_chat_orders: false, isNew: true };
     setCommands([newCmd, ...commands]);
     setEditingId(newId);
     setEditForm(newCmd);
@@ -36,7 +36,7 @@ export default function CommandsPage() {
 
   const handleEdit = (cmd: any) => {
     setEditingId(cmd.id);
-    setEditForm({ ...cmd, command: cmd.command ?? '', channel: cmd.channel ?? '', badge: cmd.badge ?? '', starts_dialog: cmd.starts_dialog ?? false });
+    setEditForm({ ...cmd, command: cmd.command ?? '', channel: cmd.channel ?? '', badge: cmd.badge ?? '', starts_dialog: cmd.starts_dialog ?? false, receives_chat_orders: cmd.receives_chat_orders ?? false });
   };
 
   const handleSave = async () => {
@@ -129,6 +129,13 @@ export default function CommandsPage() {
             <p className="mt-2 text-slate-500">
               Это уже собранные на данный момент данные и номер попытки уточнения текущего вопроса. Дублировать это в тексте инструкции не нужно.
             </p>
+            <p className="mt-2 text-slate-500">
+              Если у команды включена галочка «Получать заказы клиента в этом чате», после этого блока добавится ещё один:
+            </p>
+            <pre className="mt-2 bg-white border border-slate-200 rounded-lg p-3 text-xs font-mono whitespace-pre-wrap">{`ЗАКАЗЫ КЛИЕНТА В ЭТОМ ЧАТЕ:\nЗаказ №4 (Согласован):\n  vin: Z8T...\n  part_name: колодки`}</pre>
+            <p className="mt-2 text-slate-500">
+              Полезно для сценариев вроде «узнать статус заказа», где AI должен видеть уже существующие заказы клиента, а не только данные текущего опроса.
+            </p>
           </div>
 
           <div>
@@ -137,6 +144,9 @@ export default function CommandsPage() {
             <pre className="mt-2 bg-white border border-slate-200 rounded-lg p-3 text-xs font-mono whitespace-pre-wrap">{`<RESULT>{ "vin": "Z8T...", "part_name": "колодки", "budget": 2000 }</RESULT>`}</pre>
             <p className="mt-2 text-slate-500">
               Всё внутри тега должно быть валидным JSON — это станет телом заказа. Каждая пара ключ/значение отобразится отдельной строкой в карточке заказа в панели «Заказы клиента» — используйте понятные ключи (snake_case), они же подписи полей.
+            </p>
+            <p className="mt-2 text-slate-500">
+              Ключ <code className="bg-white border border-slate-200 rounded px-1.5 py-0.5 font-mono text-xs">status</code> тоже служебный: если его значение совпадает (без учёта регистра) с названием одного из статусов (раздел «Настройки» → «Статусы заказов»), заказ создастся сразу в этом статусе и сработают настроенные на него правила пересылки (раздел «Триггеры»). Если ключ не указан или статус не найден — заказ создаётся в статусе «Новый», как обычно.
             </p>
           </div>
 
@@ -254,6 +264,17 @@ export default function CommandsPage() {
                       <code className="bg-slate-100 border border-slate-200 rounded px-1 py-0.5 font-mono text-xs">{`<RESULT>`}</code>. Требует /триггер.
                     </span>
                   </div>
+                  <div className="flex items-start gap-2 text-sm text-slate-700">
+                    <Toggle
+                      checked={!!editForm.receives_chat_orders}
+                      onChange={v => setEditForm({ ...editForm, receives_chat_orders: v })}
+                      aria-label="Получать заказы клиента в этом чате"
+                      className="mt-0.5"
+                    />
+                    <span>
+                      Получать заказы клиента в этом чате — в промпт перед вызовом AI автоматически добавится блок со всеми заказами текущего чата (номер, статус, данные).
+                    </span>
+                  </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-500 uppercase ml-1">Промпт (Инструкции для AI)</label>
                     <Textarea
@@ -287,6 +308,9 @@ export default function CommandsPage() {
                       )}
                       {cmd.starts_dialog && (
                         <Badge variant="green">диалог</Badge>
+                      )}
+                      {cmd.receives_chat_orders && (
+                        <Badge color="#2563eb">видит заказы</Badge>
                       )}
                       <h3 className="font-semibold text-slate-800">{cmd.description || 'Без описания'}</h3>
                     </div>

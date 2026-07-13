@@ -22,6 +22,18 @@ async function getSetting(key: string): Promise<string | null> {
   return data?.value ?? null;
 }
 
+/** Renders a chat's orders as text for injection into an AI prompt (used by
+ * the command flag "получает заказы чата" and by message templates). */
+export function formatOrdersForPrompt(orders: Array<{ order_number: number; data: any; order_statuses?: { name: string } | null }>): string {
+  if (!orders.length) return 'Заказов пока нет.';
+  return orders
+    .map((o) => {
+      const fields = Object.entries(o.data ?? {}).map(([k, v]) => `  ${k}: ${v}`).join('\n');
+      return `Заказ №${o.order_number} (${o.order_statuses?.name ?? 'без статуса'}):\n${fields}`;
+    })
+    .join('\n\n');
+}
+
 /**
  * Finds the chat row for this channel + external id, creating it if this is
  * the first message ever seen from it. `matchColumn` is the channel-specific
@@ -172,16 +184,36 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
         console.error(`finishCommandTurn: заказ №${orderNumber} не найден для обновления`);
       }
     } else {
-      const { data: statusData } = await supabaseAdmin
-        .from('order_statuses')
-        .select('id')
-        .eq('name', 'Новый')
-        .single();
+      // status — тоже служебный ключ и при создании: если он совпадает
+      // (без учёта регистра) с названием существующего статуса, заказ
+      // создаётся сразу в нём (и сработают правила пересылки на этот
+      // статус), иначе — как обычно, в статусе "Новый".
+      let statusId: string | undefined;
+      if (finalJson.status) {
+        const { data: statusRow } = await supabaseAdmin
+          .from('order_statuses')
+          .select('id')
+          .ilike('name', String(finalJson.status).trim())
+          .maybeSingle();
+        statusId = statusRow?.id;
+      }
+      if (!statusId) {
+        const { data: statusData } = await supabaseAdmin
+          .from('order_statuses')
+          .select('id')
+          .eq('name', 'Новый')
+          .single();
+        statusId = statusData?.id;
+      }
+
+      const orderData: Record<string, any> = { ...finalJson };
+      delete orderData.order_number;
+      delete orderData.status;
 
       const { data: orderRow } = await supabaseAdmin.from('orders').insert([{
         chat_id: chatData.id,
-        data: finalJson,
-        status_id: statusData?.id,
+        data: orderData,
+        status_id: statusId,
         command_id: chatData.active_command_id ?? null
       }]).select().maybeSingle();
       createdOrder = orderRow;
@@ -217,6 +249,18 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
     const { runForwardRules } = await import('@/lib/orderForwarding');
     await runForwardRules(updatedOrder, updatedOrderNewStatusId);
   }
+}
+
+// Приклеивает к промпту список заказов клиента этого чата, если команда
+// включила флаг "Получать заказы клиента в этом чате" (bot_commands.receives_chat_orders).
+async function withOrdersContext(promptTemplate: string, chatId: string, receivesChatOrders: boolean): Promise<string> {
+  if (!receivesChatOrders) return promptTemplate;
+  const { data: orders } = await supabaseAdmin
+    .from('orders')
+    .select('order_number, data, order_statuses (name)')
+    .eq('chat_id', chatId)
+    .order('created_at', { ascending: true });
+  return `${promptTemplate}\n\nЗАКАЗЫ КЛИЕНТА В ЭТОМ ЧАТЕ:\n${formatOrdersForPrompt((orders ?? []) as any)}`;
 }
 
 async function callDeepSeek(systemPrompt: string, messages: Array<{ role: string; content: string }>): Promise<string> {
@@ -301,12 +345,13 @@ export async function processIncomingMessage(chatData: any, text: string, sender
         }
       }).eq('id', chatData.id);
 
+      const startPrompt = await withOrdersContext(commandData.prompt_template, chatData.id, commandData.receives_chat_orders);
       const aiResponse = await askDeepSeek(
         "Начни опрос",
         [],
         {},
         0,
-        commandData.prompt_template
+        startPrompt
       );
 
       await finishCommandTurn(chatData, sender, aiResponse, commandData.badge ?? null);
@@ -325,10 +370,12 @@ export async function processIncomingMessage(chatData: any, text: string, sender
     if (chatData.active_command_id) {
       const { data: activeCommand } = await supabaseAdmin
         .from('bot_commands')
-        .select('prompt_template, badge')
+        .select('prompt_template, badge, receives_chat_orders')
         .eq('id', chatData.active_command_id)
         .maybeSingle();
-      currentPrompt = activeCommand?.prompt_template;
+      currentPrompt = activeCommand?.prompt_template
+        ? await withOrdersContext(activeCommand.prompt_template, chatData.id, activeCommand.receives_chat_orders)
+        : undefined;
       badge = activeCommand?.badge ?? null;
     }
 
@@ -373,4 +420,16 @@ export async function processIncomingMessage(chatData: any, text: string, sender
 
     await finishCommandTurn(chatData, sender, aiResponse, badge);
   }
+}
+
+/**
+ * Runs a message template's one-shot AI turn (used by the "Шаблоны" panel
+ * in the chat's third column) and delivers it exactly like a command turn —
+ * reuses `finishCommandTurn`, so `<RESULT>` parsing, order creation/update,
+ * forward-rule triggering and dialog continuation (if the reply has no tag
+ * and the chat was left with an active command) all behave identically.
+ */
+export async function runMessageTemplate(chatData: any, systemPrompt: string, sender: ChatSender, badge: string | null): Promise<void> {
+  const aiResponse = await askDeepSeek("Составь ответ клиенту.", [], {}, 0, systemPrompt);
+  await finishCommandTurn(chatData, sender, aiResponse, badge);
 }

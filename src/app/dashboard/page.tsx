@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
-import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, Edit3, Check, X } from 'lucide-react';
+import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, Edit3, Check, X, Calendar, FileText } from 'lucide-react';
 import { TelegramIcon, WeChatIcon } from '@/components/icons';
 import { Badge, Button, Input, Skeleton, Toggle } from '@/components/ui';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,12 @@ export default function DashboardPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [statuses, setStatuses] = useState<any[]>([]);
   const [tags, setTags] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [ordersPanelOpen, setOrdersPanelOpen] = useState(true);
+  const [templatesPanelOpen, setTemplatesPanelOpen] = useState(true);
+  const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
+  const [extraAnswerDraft, setExtraAnswerDraft] = useState('');
+  const [sendingTemplateId, setSendingTemplateId] = useState<string | null>(null);
   const [openStatusDropdown, setOpenStatusDropdown] = useState<string | null>(null);
   const [openTagDropdown, setOpenTagDropdown] = useState<string | null>(null);
   const [newMessage, setNewMessage] = useState('');
@@ -52,6 +58,7 @@ export default function DashboardPage() {
     fetchChats();
     fetchStatuses();
     fetchTags();
+    fetchTemplates();
 
     const chatChannel = supabase
       .channel('global-chat-updates')
@@ -82,6 +89,46 @@ export default function DashboardPage() {
   const fetchTags = async () => {
     const { data } = await supabase.from('tags').select('*').order('created_at');
     if (data) setTags(data);
+  };
+
+  const fetchTemplates = async () => {
+    const { data } = await supabase
+      .from('message_templates')
+      .select('*')
+      .eq('is_active', true)
+      .order('created_at');
+    if (data) setTemplates(data);
+  };
+
+  const runTemplate = async (template: any, extraAnswer?: string) => {
+    if (!selectedChat) return;
+    setSendingTemplateId(template.id);
+    try {
+      const res = await fetch(`/api/templates/${template.id}/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: selectedChat.id, extraAnswer }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        toast.error(body.error || 'Не удалось отправить шаблон');
+        return;
+      }
+      toast.success('Шаблон отправлен');
+      setPendingTemplateId(null);
+      setExtraAnswerDraft('');
+    } finally {
+      setSendingTemplateId(null);
+    }
+  };
+
+  const handleTemplateClick = (template: any) => {
+    if (template.ask_extra) {
+      setPendingTemplateId(template.id);
+      setExtraAnswerDraft('');
+      return;
+    }
+    runTemplate(template);
   };
 
   const fetchChats = async () => {
@@ -342,8 +389,17 @@ export default function DashboardPage() {
               placeholder="Поиск чатов..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-slate-50 border-slate-200 w-full"
+              className="pl-10 pr-9 bg-slate-50 border-slate-200 w-full"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                title="Очистить"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors focus-visible:outline-none"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
         </div>
         <div className="flex gap-1.5 px-4 py-2 border-b border-slate-200 bg-white">
@@ -408,8 +464,12 @@ export default function DashboardPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge uppercase={false} icon={chat.status === 'bot_processing' ? <Bot size={12} /> : <User size={12} />}>
-                      {chat.status === 'bot_processing' ? 'AI' : 'Оператор'}
+                    <Badge
+                      className="p-1.5"
+                      title={chat.status === 'bot_processing' ? 'AI' : 'Оператор'}
+                      icon={chat.status === 'bot_processing' ? <Bot size={12} /> : <User size={12} />}
+                    >
+                      {null}
                     </Badge>
                     {chat.channel === 'wechat' ? (
                       <Badge variant="wechat" uppercase={false} icon={<WeChatIcon size={11} />}>WeChat</Badge>
@@ -563,21 +623,22 @@ export default function DashboardPage() {
 
       {/* Right Info Panel */}
       {selectedChat && (
-        <div className="w-80 border-l border-slate-200 bg-slate-50/30 flex flex-col">
-          <div className="h-[65px] px-4 border-b border-slate-200 bg-white flex items-center">
-            <h3 className="font-bold text-slate-800 flex items-center gap-2">
-              <ShoppingBag size={18} className="text-blue-600" /> Заказы клиента
-            </h3>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="w-80 border-l border-slate-200 bg-slate-50/30 flex flex-col overflow-y-auto">
+          <CollapsibleSection
+            title="Заказы клиента"
+            icon={<ShoppingBag size={18} className="text-blue-600" />}
+            open={ordersPanelOpen}
+            onToggle={() => setOrdersPanelOpen(v => !v)}
+          >
+          <div className="p-4 space-y-4">
             {orders.map((order) => {
               const orderTagIds = new Set((order.order_tags || []).map((ot: any) => ot.tag_id));
               return (
               <div key={order.id} className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-slate-300 transition-all">
-                {/* Header: номер + статус */}
-                <div className="flex justify-between items-center mb-3">
-                  <Badge mono>#{order.order_number}</Badge>
+                {/* Row 1: Заказ №N + статус + оплата */}
+                <div className="flex items-center gap-2 flex-wrap mb-2">
+                  <span className="text-lg font-bold text-slate-900">Заказ №{order.order_number}</span>
+
                   {/* Status dropdown */}
                   <div className="relative" data-dropdown>
                     <button
@@ -609,49 +670,36 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
-                </div>
 
-                {/* Оплата + команда-источник */}
-                <div className="flex items-center justify-between gap-2 mb-3">
+                  {/* Оплата */}
                   <div className="flex items-center gap-2">
                     <Toggle checked={!!order.is_paid} onChange={(v) => togglePaid(order.id, v)} color="green" aria-label="Статус оплаты" />
-                    <span className={order.is_paid ? 'text-[10px] font-bold uppercase text-emerald-600' : 'text-[10px] font-bold uppercase text-slate-400'}>
+                    <span className={order.is_paid ? 'text-xs font-bold text-emerald-600' : 'text-xs font-bold text-slate-400'}>
                       {order.is_paid ? 'Оплачен' : 'Не оплачен'}
                     </span>
                   </div>
-                  <span className="text-[9px] font-mono text-slate-400 truncate" title={order.command?.description}>
-                    {order.command_id ? (order.command?.command || order.command?.description || '…') : 'без команды'}
+                </div>
+
+                {/* Row 2: дата + команда + метки */}
+                <div className="flex items-center gap-2 flex-wrap mb-3">
+                  <span className="text-xs text-slate-400 flex items-center gap-1">
+                    <Calendar size={12} />
+                    {new Date(order.created_at).toLocaleDateString()} {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
-                </div>
-
-                {/* Data fields */}
-                <div className="space-y-2 mb-3">
-                  {Object.entries(order.data || {}).map(([key, value]: [string, any]) => (
-                    <div key={key} className="flex flex-col">
-                      <span className="text-[9px] text-slate-400 uppercase font-bold">{key}</span>
-                      <span className="text-xs font-medium text-slate-700">{String(value)}</span>
-                    </div>
+                  <Badge mono={!!order.command_id} title={order.command?.description}>
+                    {order.command_id ? (order.command?.command || order.command?.description || '…') : 'без команды'}
+                  </Badge>
+                  {(order.order_tags || []).map((ot: any) => ot.tags).filter(Boolean).map((tag: any) => (
+                    <Badge
+                      key={tag.id}
+                      color={tag.color}
+                      dot
+                      uppercase={false}
+                      onRemove={() => toggleOrderTag(order.id, tag.id, true)}
+                    >
+                      {tag.name}
+                    </Badge>
                   ))}
-                </div>
-
-                {/* Active tags + add button */}
-                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <div className="flex flex-wrap gap-1.5 flex-1">
-                    {(order.order_tags || []).map((ot: any) => ot.tags).filter(Boolean).map((tag: any) => (
-                      <Badge
-                        key={tag.id}
-                        color={tag.color}
-                        dot
-                        uppercase={false}
-                        onRemove={() => toggleOrderTag(order.id, tag.id, true)}
-                      >
-                        {tag.name}
-                      </Badge>
-                    ))}
-                    {(order.order_tags || []).length === 0 && (
-                      <span className="text-[9px] text-slate-300">нет меток</span>
-                    )}
-                  </div>
                   {tags.length > 0 && (
                     <div className="relative shrink-0" data-dropdown>
                       <button
@@ -660,7 +708,7 @@ export default function DashboardPage() {
                         title="Добавить метку"
                       ><Plus size={13} /></button>
                       {openTagDropdown === order.id && (
-                        <div className="absolute bottom-full right-0 mb-1 z-20 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[150px]">
+                        <div className="absolute top-full right-0 mt-1 z-20 bg-white border border-slate-200 rounded-xl shadow-lg py-1 min-w-[150px]">
                           {tags.filter(tag => !orderTagIds.has(tag.id)).map(tag => (
                             <button
                               key={tag.id}
@@ -679,6 +727,19 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Данные заказа */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase mb-2">Данные заказа</div>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(order.data || {}).map(([key, value]: [string, any]) => (
+                      <div key={key} className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs">
+                        <span className="text-slate-400 mr-1">{key}:</span>
+                        <span className="font-medium text-slate-700">{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
               );
             })}
@@ -695,8 +756,72 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Шаблоны"
+            icon={<FileText size={18} className="text-blue-600" />}
+            open={templatesPanelOpen}
+            onToggle={() => setTemplatesPanelOpen(v => !v)}
+          >
+          <div className="p-4 space-y-2">
+            {templates.map((tpl) => (
+              <div key={tpl.id}>
+                <button
+                  onClick={() => handleTemplateClick(tpl)}
+                  disabled={sendingTemplateId === tpl.id}
+                  className="w-full text-left px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none"
+                >
+                  {tpl.title}
+                </button>
+                {pendingTemplateId === tpl.id && (
+                  <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                    <p className="text-xs font-semibold text-slate-600">{tpl.extra_question}</p>
+                    <Input
+                      value={extraAnswerDraft}
+                      onChange={(e) => setExtraAnswerDraft(e.target.value)}
+                      placeholder="Ответ оператора..."
+                      className="h-9"
+                      autoFocus
+                      onKeyDown={(e) => { if (e.key === 'Enter' && extraAnswerDraft.trim()) runTemplate(tpl, extraAnswerDraft); }}
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button variant="secondary" size="sm" onClick={() => { setPendingTemplateId(null); setExtraAnswerDraft(''); }}>Отмена</Button>
+                      <Button
+                        size="sm"
+                        onClick={() => runTemplate(tpl, extraAnswerDraft)}
+                        disabled={!extraAnswerDraft.trim() || sendingTemplateId === tpl.id}
+                      >
+                        Отправить
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {templates.length === 0 && (
+              <p className="text-xs text-slate-400 text-center py-6">Шаблонов пока нет</p>
+            )}
+          </div>
+          </CollapsibleSection>
         </div>
       )}
+    </div>
+  );
+}
+
+function CollapsibleSection({ title, icon, open, onToggle, children }: { title: string; icon: React.ReactNode; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <div className="border-b border-slate-200 shrink-0">
+      <button
+        onClick={onToggle}
+        className="w-full h-[52px] px-4 flex items-center justify-between bg-white hover:bg-slate-50 transition-colors focus-visible:outline-none"
+      >
+        <h3 className="font-bold text-slate-800 flex items-center gap-2">{icon} {title}</h3>
+        <ChevronDown size={16} className={cn('text-slate-400 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && children}
     </div>
   );
 }

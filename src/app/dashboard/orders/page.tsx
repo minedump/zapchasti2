@@ -123,8 +123,17 @@ export default function OrdersPage() {
             placeholder="Поиск по имени клиента..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            className="pl-10 pr-9"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              title="Очистить"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors focus-visible:outline-none"
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
-import { MessageSquare, Settings, LogOut, Bot, ShoppingBag, Workflow } from 'lucide-react';
+import { MessageSquare, Settings, LogOut, Bot, ShoppingBag, Workflow, FileText } from 'lucide-react';
 import { WeChatIcon } from '@/components/icons';
 import { Button } from '@/components/ui';
 
@@ -30,7 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex h-screen bg-slate-50">
       {/* Sidebar */}
       <aside className="w-64 bg-slate-900 text-white flex flex-col shadow-xl">
-        <div className="p-6 text-xl font-bold border-b border-slate-800 flex items-center gap-3">
+        <div className="h-[65px] px-6 text-xl font-bold border-b border-slate-800 flex items-center gap-3">
           <div className="p-2 bg-blue-600 rounded-lg">
             <Bot size={20} className="text-white" />
           </div>
@@ -42,6 +42,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <NavItem href="/dashboard/commands" icon={<Bot size={20} />} label="Команды AI" active={pathname.startsWith('/dashboard/commands')} />
           <NavItem href="/dashboard/wechat" icon={<WeChatIcon size={20} />} label="WeChat" active={pathname.startsWith('/dashboard/wechat')} />
           <NavItem href="/dashboard/triggers" icon={<Workflow size={20} />} label="Триггеры" active={pathname.startsWith('/dashboard/triggers')} />
+          <NavItem href="/dashboard/templates" icon={<FileText size={20} />} label="Шаблоны" active={pathname.startsWith('/dashboard/templates')} />
           <NavItem href="/dashboard/settings" icon={<Settings size={20} />} label="Настройки" active={pathname.startsWith('/dashboard/settings')} />
         </nav>
         <div className="p-4 border-t border-slate-800">
