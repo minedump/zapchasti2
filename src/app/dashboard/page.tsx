@@ -756,8 +756,8 @@ export default function DashboardPage() {
                     <div className={`max-w-[70%] p-3 rounded-2xl ${
                       msg.is_from_bot
                         ? (msg.is_ai_generated
-                            ? 'bg-purple-100 text-purple-900 rounded-br-none'
-                            : 'bg-amber-100 text-amber-800 rounded-br-none')
+                            ? 'bg-purple-100 border border-purple-300 text-purple-900 rounded-br-none'
+                            : 'bg-amber-100 border border-amber-300 text-amber-800 rounded-br-none')
                         : msg.sender_id
                           ? 'bg-blue-600 text-white rounded-br-none'
                           : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none'
