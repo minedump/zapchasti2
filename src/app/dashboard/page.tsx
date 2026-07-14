@@ -289,18 +289,31 @@ export default function DashboardPage() {
     window.history.pushState({}, '', window.location.pathname);
   };
 
-  // Свайп вправо в чате — назад к списку (только на мобильном)
+  // Свайпы на мобильном: в чате вправо — назад к списку, влево — открыть
+  // заказы/шаблоны; на панели заказов/шаблонов влево — назад к чату.
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-  const handleChatTouchStart = (e: React.TouchEvent) => {
+  const readSwipe = (e: React.TouchEvent): { dx: number; dy: number } | null => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start || window.innerWidth >= 768) return null;
+    return {
+      dx: e.changedTouches[0].clientX - start.x,
+      dy: e.changedTouches[0].clientY - start.y,
+    };
+  };
+  const handleTouchStart = (e: React.TouchEvent) => {
     touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   };
   const handleChatTouchEnd = (e: React.TouchEvent) => {
-    const start = touchStartRef.current;
-    touchStartRef.current = null;
-    if (!start || !selectedChat || window.innerWidth >= 768) return;
-    const dx = e.changedTouches[0].clientX - start.x;
-    const dy = e.changedTouches[0].clientY - start.y;
-    if (dx > 80 && Math.abs(dy) < 60) closeChat();
+    const swipe = readSwipe(e);
+    if (!swipe || !selectedChat || Math.abs(swipe.dy) >= 60) return;
+    if (swipe.dx > 80) closeChat();
+    else if (swipe.dx < -80) setMobileInfoOpen(true);
+  };
+  const handlePanelTouchEnd = (e: React.TouchEvent) => {
+    const swipe = readSwipe(e);
+    if (!swipe || Math.abs(swipe.dy) >= 60) return;
+    if (Math.abs(swipe.dx) > 80) setMobileInfoOpen(false);
   };
 
   // Авто-выбор чата из URL (только один раз при загрузке)
@@ -650,7 +663,7 @@ export default function DashboardPage() {
       {/* Chat Window */}
       <div
         className={cn("flex-1 flex-col bg-slate-50", selectedChat ? "flex" : "hidden md:flex")}
-        onTouchStart={handleChatTouchStart}
+        onTouchStart={handleTouchStart}
         onTouchEnd={handleChatTouchEnd}
       >
         {selectedChat ? (
@@ -819,17 +832,22 @@ export default function DashboardPage() {
       {/* Right Info Panel: на десктопе — третья колонка, на мобиле — полноэкранная
           панель, открывается кнопкой с точками в шапке чата */}
       {selectedChat && (
-        <div className={cn(
-          "flex-col bg-slate-50/30 overflow-y-auto",
-          mobileInfoOpen
-            ? "flex fixed inset-0 z-50 bg-slate-50 md:static md:z-auto md:w-80 md:bg-slate-50/30 md:border-l md:border-slate-200"
-            : "hidden md:flex md:w-80 md:border-l md:border-slate-200"
-        )}>
-          <div className="md:hidden h-[65px] px-4 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
-            <h3 className="font-bold text-slate-800">Заказы и шаблоны</h3>
-            <Button variant="secondary" className="w-10 h-10 p-0" onClick={() => setMobileInfoOpen(false)} title="Закрыть">
-              <X size={18} />
+        <div
+          className={cn(
+            "flex-col bg-slate-50/30 overflow-y-auto",
+            mobileInfoOpen
+              // top-14 — не перекрываем мобильную шапку с выпадающим меню разделов
+              ? "flex fixed inset-x-0 top-14 bottom-0 z-30 bg-slate-50 md:static md:z-auto md:w-80 md:bg-slate-50/30 md:border-l md:border-slate-200"
+              : "hidden md:flex md:w-80 md:border-l md:border-slate-200"
+          )}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handlePanelTouchEnd}
+        >
+          <div className="md:hidden h-[65px] px-4 border-b border-slate-200 bg-white flex items-center gap-2 shrink-0">
+            <Button variant="secondary" className="w-10 h-10 p-0" onClick={() => setMobileInfoOpen(false)} title="Назад к чату">
+              <ArrowLeft size={18} />
             </Button>
+            <h3 className="font-bold text-slate-800">Заказы и шаблоны</h3>
           </div>
           <CollapsibleSection
             title="Заказы клиента"
