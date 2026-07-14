@@ -3,14 +3,14 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
-import { MessageSquare, Settings, LogOut, Bot, ShoppingBag, Workflow, FileText, BookOpen, Menu, X, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { MessageSquare, Settings, LogOut, Bot, ShoppingBag, Workflow, FileText, BookOpen, ChevronDown, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { WeChatIcon } from '@/components/icons';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Чаты', icon: MessageSquare, isActive: (p: string) => p === '/dashboard' },
   { href: '/dashboard/orders', label: 'Заказы', icon: ShoppingBag, isActive: (p: string) => p.startsWith('/dashboard/orders') },
-  { href: '/dashboard/commands', label: 'Команды AI', icon: Bot, isActive: (p: string) => p.startsWith('/dashboard/commands') },
+  { href: '/dashboard/commands', label: 'Команды', icon: Bot, isActive: (p: string) => p.startsWith('/dashboard/commands') },
   { href: '/dashboard/wechat', label: 'WeChat', icon: WeChatIcon, isActive: (p: string) => p.startsWith('/dashboard/wechat') },
   { href: '/dashboard/triggers', label: 'Триггеры', icon: Workflow, isActive: (p: string) => p.startsWith('/dashboard/triggers') },
   { href: '/dashboard/templates', label: 'Шаблоны', icon: FileText, isActive: (p: string) => p.startsWith('/dashboard/templates') },
@@ -56,20 +56,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="flex flex-col md:flex-row h-screen bg-slate-50">
       {/* Mobile header */}
       <header className="md:hidden relative z-40 bg-slate-900 text-white shrink-0">
-        <div className="h-14 px-4 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-1.5 bg-blue-600 rounded-lg">
-              <Bot size={18} className="text-white" />
-            </div>
-            <span className="tracking-widest uppercase text-sm font-bold">PromptFlow</span>
-          </div>
-          <button
-            onClick={() => setMobileMenuOpen(v => !v)}
-            aria-label={mobileMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
-            className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-800 transition-colors focus-visible:outline-none"
-          >
-            {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
+        <div className="h-14 px-3 flex items-center">
+          {(() => {
+            const current = NAV_ITEMS.find(item => item.isActive(pathname));
+            const CurrentIcon = current?.icon ?? Bot;
+            return (
+              <button
+                onClick={() => setMobileMenuOpen(v => !v)}
+                aria-label="Выбрать раздел"
+                aria-expanded={mobileMenuOpen}
+                className="w-full h-10 px-3.5 flex items-center gap-2.5 rounded-xl bg-slate-800 border border-slate-700/60 text-sm font-semibold transition-colors hover:bg-slate-700/70 focus-visible:outline-none"
+              >
+                <CurrentIcon size={17} className="text-blue-400 shrink-0" />
+                <span className="flex-1 text-left truncate">{current?.label ?? 'PromptFlow'}</span>
+                <ChevronDown size={16} className={cn('text-slate-400 transition-transform duration-200', mobileMenuOpen && 'rotate-180')} />
+              </button>
+            );
+          })()}
         </div>
 
         {/* Backdrop */}

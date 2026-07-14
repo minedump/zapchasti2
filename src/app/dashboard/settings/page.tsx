@@ -74,12 +74,7 @@ export default function SettingsPage() {
     <div className="p-8 max-w-5xl mx-auto w-full flex-1">
       <Toaster />
 
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Настройки</h1>
-          <p className="text-slate-500 mt-1">Справочники и системные настройки</p>
-        </div>
-      </div>
+      <h1 className="hidden md:block text-3xl font-bold text-slate-900 mb-8">Настройки</h1>
 
       {loading ? (
         <div className="space-y-6">

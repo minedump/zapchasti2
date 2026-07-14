@@ -19,10 +19,7 @@ export default function DocsPage() {
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <div className="p-8 max-w-4xl mx-auto w-full flex-1">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">Документация</h1>
-          <p className="text-slate-500 mt-1">Как работают модули AI-автоматизации</p>
-        </div>
+        <h1 className="hidden md:block text-3xl font-bold text-slate-900 mb-8">Документация</h1>
 
         <div className="flex gap-1.5 mb-8 bg-slate-100 p-1.5 rounded-2xl w-fit">
           {TABS.map(t => (

@@ -108,12 +108,7 @@ export default function OrdersPage() {
     <div className="p-8 max-w-5xl mx-auto w-full flex-1">
 
       {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Все заказы</h1>
-          <p className="text-slate-500 mt-1">История всех запросов от клиентов</p>
-        </div>
-      </div>
+      <h1 className="hidden md:block text-3xl font-bold text-slate-900 mb-8">Заказы</h1>
 
       {/* Filters */}
       <div className="mb-6 space-y-3">

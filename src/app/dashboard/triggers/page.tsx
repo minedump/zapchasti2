@@ -159,11 +159,8 @@ export default function TriggersPage() {
       <div className="p-8 max-w-5xl mx-auto w-full flex-1">
         <Toaster position="top-right" />
 
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">Триггеры</h1>
-            <p className="text-slate-500 mt-1">Автоматическая пересылка заказов по правилам</p>
-          </div>
+        <div className="flex justify-end md:justify-between items-center mb-4 md:mb-8">
+          <h1 className="hidden md:block text-3xl font-bold text-slate-900">Триггеры</h1>
           <Button onClick={handleAdd} className="gap-2">
             <Plus size={18} /> Создать правило
           </Button>

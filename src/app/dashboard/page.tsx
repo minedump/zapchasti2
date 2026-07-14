@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
-import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, Edit3, Check, X, Calendar, FileText, Bell, BellOff } from 'lucide-react';
+import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, Edit3, Check, X, Calendar, FileText, Bell, BellOff, ArrowLeft } from 'lucide-react';
 import { TelegramIcon, WeChatIcon } from '@/components/icons';
 import { Badge, Button, Input, Skeleton, Toggle } from '@/components/ui';
 import { cn } from '@/lib/utils';
@@ -252,6 +252,26 @@ export default function DashboardPage() {
     window.history.pushState({ path: newUrl }, '', newUrl);
   };
 
+  // Возврат к списку чатов (мобильный режим: список ↔ чат, как в Telegram)
+  const closeChat = () => {
+    setSelectedChat(null);
+    window.history.pushState({}, '', window.location.pathname);
+  };
+
+  // Свайп вправо в чате — назад к списку (только на мобильном)
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const handleChatTouchStart = (e: React.TouchEvent) => {
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const handleChatTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start || !selectedChat || window.innerWidth >= 768) return;
+    const dx = e.changedTouches[0].clientX - start.x;
+    const dy = e.changedTouches[0].clientY - start.y;
+    if (dx > 80 && Math.abs(dy) < 60) closeChat();
+  };
+
   // Авто-выбор чата из URL (только один раз при загрузке)
   useEffect(() => {
     if (chatIdFromUrl && chats.length > 0 && !hasInitialSelected) {
@@ -465,7 +485,10 @@ export default function DashboardPage() {
     <div className="flex h-full bg-white">
       <Toaster />
       {/* Chat List */}
-      <div className="w-80 border-r border-slate-200 flex flex-col bg-slate-50/50">
+      <div className={cn(
+        "w-full md:w-80 border-r border-slate-200 flex-col bg-slate-50/50",
+        selectedChat ? "hidden md:flex" : "flex"
+      )}>
         <div className="h-[65px] px-4 border-b border-slate-200 bg-white flex items-center">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -592,11 +615,22 @@ export default function DashboardPage() {
       </div>
 
       {/* Chat Window */}
-      <div className="flex-1 flex flex-col bg-slate-50">
+      <div
+        className={cn("flex-1 flex-col bg-slate-50", selectedChat ? "flex" : "hidden md:flex")}
+        onTouchStart={handleChatTouchStart}
+        onTouchEnd={handleChatTouchEnd}
+      >
         {selectedChat ? (
           <>
             <div className="h-[65px] px-4 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm">
               <div className="flex items-center gap-2 min-w-0">
+                <button
+                  onClick={closeChat}
+                  title="К списку чатов"
+                  className="md:hidden shrink-0 w-9 h-9 -ml-1.5 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 transition-colors focus-visible:outline-none"
+                >
+                  <ArrowLeft size={20} />
+                </button>
                 {editingChatName ? (
                   <div className="flex items-center gap-1.5">
                     <Input
@@ -740,7 +774,7 @@ export default function DashboardPage() {
 
       {/* Right Info Panel */}
       {selectedChat && (
-        <div className="w-80 border-l border-slate-200 bg-slate-50/30 flex flex-col overflow-y-auto">
+        <div className="hidden md:flex w-80 border-l border-slate-200 bg-slate-50/30 flex-col overflow-y-auto">
           <CollapsibleSection
             title="Заказы клиента"
             icon={<ShoppingBag size={18} className="text-blue-600" />}
