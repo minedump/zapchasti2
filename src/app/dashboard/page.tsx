@@ -555,31 +555,27 @@ export default function DashboardPage() {
             )}
           </div>
         </div>
-        <div className="flex gap-1.5 px-4 py-2 border-b border-slate-200 bg-white">
-          <Button
-            size="sm"
-            variant={channelFilter === 'all' ? 'primary' : 'secondary'}
-            className="flex-1"
-            onClick={() => setChannelFilter('all')}
-          >
-            Все
-          </Button>
-          <Button
-            size="sm"
-            variant={channelFilter === 'telegram' ? 'primary' : 'secondary'}
-            className="flex-1 gap-1.5"
-            onClick={() => setChannelFilter('telegram')}
-          >
-            <TelegramIcon size={13} /> TG
-          </Button>
-          <Button
-            size="sm"
-            variant={channelFilter === 'wechat' ? 'primary' : 'secondary'}
-            className="flex-1 gap-1.5"
-            onClick={() => setChannelFilter('wechat')}
-          >
-            <WeChatIcon size={13} /> WeChat
-          </Button>
+        <div className="flex items-stretch border-b border-slate-200 bg-white">
+          {([
+            { id: 'all' as const, label: 'Все', icon: null },
+            { id: 'telegram' as const, label: 'TG', icon: <TelegramIcon size={13} /> },
+            { id: 'wechat' as const, label: 'WeChat', icon: <WeChatIcon size={13} /> },
+          ]).map((tab, i) => (
+            <div key={tab.id} className="flex-1 flex items-stretch min-w-0">
+              {i > 0 && <span className="w-px bg-slate-200 shrink-0" />}
+              <button
+                onClick={() => setChannelFilter(tab.id)}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold uppercase border-b-2 -mb-px transition-colors cursor-pointer focus-visible:outline-none',
+                  channelFilter === tab.id
+                    ? 'text-blue-600 border-blue-600'
+                    : 'text-slate-400 border-transparent hover:text-slate-600'
+                )}
+              >
+                {tab.icon} {tab.label}
+              </button>
+            </div>
+          ))}
         </div>
         <div className="flex-1 overflow-y-auto">
           {loading ? (
@@ -604,8 +600,8 @@ export default function DashboardPage() {
                 key={chat.id}
                 onClick={() => handleChatSelect(chat)}
                 className={cn(
-                  "w-full p-4 flex items-start gap-3 border-b border-slate-100 border-l-4 transition-all cursor-pointer",
-                  selectedChat?.id === chat.id ? "bg-blue-50 border-l-blue-600" : "border-l-transparent hover:bg-white/50"
+                  "w-full p-4 flex items-start gap-3 border-b border-slate-100 transition-all cursor-pointer",
+                  selectedChat?.id === chat.id ? "bg-blue-50" : "hover:bg-white/50"
                 )}
               >
                 <ChatAvatar name={chat.customer_name} color={chat.avatar_color} />
@@ -645,9 +641,9 @@ export default function DashboardPage() {
                       {null}
                     </Badge>
                     {chat.channel === 'wechat' ? (
-                      <Badge variant="wechat" uppercase={false} icon={<WeChatIcon size={11} />}>WeChat</Badge>
+                      <Badge variant="wechat" className="p-1.5" title="WeChat" icon={<WeChatIcon size={12} />}>{null}</Badge>
                     ) : (
-                      <Badge variant="telegram" uppercase={false} icon={<TelegramIcon size={11} />}>TG</Badge>
+                      <Badge variant="telegram" className="p-1.5" title="Telegram" icon={<TelegramIcon size={12} />}>{null}</Badge>
                     )}
                     {chat.active_command && (
                       <Badge mono>{chat.active_command.command}</Badge>
@@ -788,7 +784,10 @@ export default function DashboardPage() {
                           ? 'bg-blue-600 text-white rounded-br-none'
                           : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none'
                     }`}>
-                      <p className="text-sm whitespace-pre-wrap">{stripBadgePrefix(msg.content, msg.badge)}</p>
+                      {/* Показываем ровно то, что видит получатель: [Бейдж] первой
+                          строкой текста (strip убирает вшитые подписи старых
+                          сообщений, withBadge добавляет ровно одну) */}
+                      <p className="text-sm whitespace-pre-wrap">{withBadge(stripBadgePrefix(msg.content, msg.badge), msg.badge)}</p>
                       <span className="text-[10px] opacity-50 mt-1 block text-right">
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>

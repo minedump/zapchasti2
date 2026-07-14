@@ -123,21 +123,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </header>
 
       {/* Desktop sidebar */}
+      {/* Единая геометрия: контейнеры px-4 (16px), квадрат логотипа и пункты
+          начинаются от одной линии, иконки внутри — тоже (px-2 у пункта = p-2
+          у логотипа). Свёрнутая ширина 68px = 16 + 36 + 16 — иконки остаются
+          на той же оси и не скачут при сворачивании. */}
       <aside className={cn(
         'hidden md:flex bg-slate-900 text-white flex-col shadow-xl transition-all duration-200 shrink-0',
-        collapsed ? 'w-[76px]' : 'w-64'
+        collapsed ? 'w-[68px]' : 'w-64'
       )}>
-        <div className={cn(
-          'h-[65px] border-b border-slate-800 flex items-center gap-3',
-          collapsed ? 'justify-center px-2' : 'px-6'
-        )}>
+        <div className="h-[65px] border-b border-slate-800 flex items-center gap-3 px-4">
           <div className="p-2 bg-blue-600 rounded-lg shrink-0">
             <Bot size={20} className="text-white" />
           </div>
           {!collapsed && <span className="tracking-widest uppercase text-sm font-bold">PromptFlow</span>}
         </div>
 
-        <nav className={cn('flex-1 space-y-2', collapsed ? 'p-3' : 'p-4')}>
+        <nav className="flex-1 space-y-1.5 p-4">
           {NAV_ITEMS.map(({ href, label, icon: Icon, isActive }) => {
             const active = isActive(pathname);
             return (
@@ -146,8 +147,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 href={href}
                 title={collapsed ? label : undefined}
                 className={cn(
-                  'flex items-center gap-3 p-3 rounded-xl transition-all',
-                  collapsed && 'justify-center',
+                  'flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-all',
+                  collapsed && 'w-9 h-9 p-0 justify-center',
                   active ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                 )}
               >
@@ -158,28 +159,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           })}
         </nav>
 
-        <div className={cn('border-t border-slate-800 space-y-1', collapsed ? 'p-3' : 'p-4')}>
-          <button
-            onClick={logout}
-            title={collapsed ? 'Выйти' : undefined}
-            className={cn(
-              'w-full flex items-center gap-3 p-3 rounded-xl text-red-400 hover:bg-red-900/30 transition-colors focus-visible:outline-none',
-              collapsed && 'justify-center'
-            )}
-          >
-            <LogOut size={20} className="shrink-0" />
-            {!collapsed && 'Выйти'}
-          </button>
+        <div className="border-t border-slate-800 p-4">
           <button
             onClick={toggleCollapsed}
             title={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
             className={cn(
-              'w-full flex items-center gap-3 p-3 rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white transition-colors focus-visible:outline-none',
-              collapsed && 'justify-center'
+              'w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm text-slate-400 hover:bg-slate-800 hover:text-white transition-colors focus-visible:outline-none cursor-pointer',
+              collapsed && 'w-9 h-9 p-0 justify-center'
             )}
           >
             {collapsed ? <ChevronsRight size={20} className="shrink-0" /> : <ChevronsLeft size={20} className="shrink-0" />}
             {!collapsed && 'Свернуть'}
+          </button>
+        </div>
+        <div className="border-t border-slate-800 p-4">
+          <button
+            onClick={logout}
+            title={collapsed ? 'Выйти' : undefined}
+            className={cn(
+              'w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm text-red-400 hover:bg-red-900/30 transition-colors focus-visible:outline-none cursor-pointer',
+              collapsed && 'w-9 h-9 p-0 justify-center'
+            )}
+          >
+            <LogOut size={20} className="shrink-0" />
+            {!collapsed && 'Выйти'}
           </button>
         </div>
       </aside>
