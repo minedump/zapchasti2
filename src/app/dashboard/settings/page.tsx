@@ -10,7 +10,8 @@ import { toast, Toaster } from 'react-hot-toast';
 export default function SettingsPage() {
   const [statuses, setStatuses] = useState<any[]>([]);
   const [tags, setTags] = useState<any[]>([]);
-  const [systemMessageBadge, setSystemMessageBadge] = useState('');
+  const [systemBadgeTelegram, setSystemBadgeTelegram] = useState('');
+  const [systemBadgeWechat, setSystemBadgeWechat] = useState('');
   const [loading, setLoading] = useState(true);
 
   // inline-add state
@@ -28,20 +29,24 @@ export default function SettingsPage() {
     const [{ data: sData }, { data: tData }, { data: settingsData }] = await Promise.all([
       supabase.from('order_statuses').select('*').order('created_at'),
       supabase.from('tags').select('*').order('created_at'),
-      supabase.from('bot_settings').select('key, value').in('key', ['system_message_badge']),
+      supabase.from('bot_settings').select('key, value').in('key', ['system_message_badge_telegram', 'system_message_badge_wechat']),
     ]);
     if (sData) setStatuses(sData);
     if (tData) setTags(tData);
     if (settingsData) {
       const byKey = new Map(settingsData.map(s => [s.key, s.value]));
-      setSystemMessageBadge(byKey.get('system_message_badge') ?? '');
+      setSystemBadgeTelegram(byKey.get('system_message_badge_telegram') ?? '');
+      setSystemBadgeWechat(byKey.get('system_message_badge_wechat') ?? '');
     }
     setLoading(false);
   };
 
   const saveBadges = async () => {
-    await supabase.from('bot_settings').upsert({ key: 'system_message_badge', value: systemMessageBadge });
-    toast.success('Бейдж сохранен');
+    await Promise.all([
+      supabase.from('bot_settings').upsert({ key: 'system_message_badge_telegram', value: systemBadgeTelegram }),
+      supabase.from('bot_settings').upsert({ key: 'system_message_badge_wechat', value: systemBadgeWechat }),
+    ]);
+    toast.success('Бейджи сохранены');
   };
 
   const addStatus = async () => {
@@ -104,12 +109,18 @@ export default function SettingsPage() {
         <Section
           icon={<Tags size={18} />}
           title="Бейдж системных сообщений"
-          description="Метка на служебных уведомлениях бота (промпт и бейдж ассистента настраиваются в разделе «Команды AI»)"
+          description="Своя метка-подпись для служебных уведомлений в каждом канале (промпт и бейдж ассистента — в разделе «Команды AI»)"
           action={<Button onClick={saveBadges} className="gap-2"><Save size={16} /> Сохранить</Button>}
         >
-          <div className="space-y-1.5 max-w-sm">
-            <label className="text-xs font-bold text-slate-500 uppercase ml-1">Системные сообщения</label>
-            <Input value={systemMessageBadge} onChange={e => setSystemMessageBadge(e.target.value)} placeholder="напр. Система" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase ml-1">Telegram</label>
+              <Input value={systemBadgeTelegram} onChange={e => setSystemBadgeTelegram(e.target.value)} placeholder="напр. Система" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase ml-1">WeChat</label>
+              <Input value={systemBadgeWechat} onChange={e => setSystemBadgeWechat(e.target.value)} placeholder="напр. Система" />
+            </div>
           </div>
         </Section>
 

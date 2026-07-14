@@ -106,9 +106,11 @@ async function sendServiceMessage(dbChatId: string, sender: ChatSender, text: st
   }]);
 }
 
-async function sendSystemMessage(dbChatId: string, sender: ChatSender, text: string) {
-  const badge = await getSetting('system_message_badge');
-  await sendServiceMessage(dbChatId, sender, text, badge);
+// Бейдж системных сообщений — свой на каждый канал (Настройки → «Бейдж
+// системных сообщений»).
+async function sendSystemMessage(chatData: { id: string; channel: string }, sender: ChatSender, text: string) {
+  const badge = await getSetting(`system_message_badge_${chatData.channel}`);
+  await sendServiceMessage(chatData.id, sender, text, badge);
 }
 
 // Разбирает ответ AI на предмет тега <RESULT>...</RESULT>, которым завершается команда.
@@ -450,7 +452,7 @@ export async function processIncomingMessage(chatData: any, text: string, sender
     // Блокируем переключение, только если уже идёт другая команда,
     // а не просто потому что бот в режиме агента по умолчанию
     if (chatData.active_command_id) {
-      await sendSystemMessage(chatData.id, sender, "Пожалуйста, сначала завершите текущий опрос.");
+      await sendSystemMessage(chatData, sender, "Пожалуйста, сначала завершите текущий опрос.");
       return;
     }
 

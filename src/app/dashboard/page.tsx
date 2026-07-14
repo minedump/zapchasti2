@@ -760,15 +760,11 @@ export default function DashboardPage() {
                             : 'bg-amber-100 text-amber-800 rounded-br-none')
                         : msg.sender_id
                           ? 'bg-blue-600 text-white rounded-br-none'
-                          : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-sm'
+                          : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none'
                     }`}>
-                      {msg.badge && (
-                        <span className="text-[10px] font-bold uppercase tracking-wide opacity-60 block mb-1">{msg.badge}</span>
-                      )}
                       <p className="text-sm whitespace-pre-wrap">{stripBadgePrefix(msg.content, msg.badge)}</p>
                       <span className="text-[10px] opacity-50 mt-1 block text-right">
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        {msg.is_from_bot && (msg.is_ai_generated ? ' • AI' : ' • Система')}
                       </span>
                     </div>
                   </div>
