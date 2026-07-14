@@ -15,6 +15,18 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "PromptFlow - AI Telegram CRM",
   description: "AI-powered CRM for Telegram automation",
+  // PWA: манифест + режим standalone на iOS — обязательны, чтобы после
+  // «На экран Домой» приложение открывалось без Safari-обвязки и могло
+  // запрашивать разрешение на Web Push (iOS 16.4+).
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "PromptFlow",
+    statusBarStyle: "default",
+  },
+  icons: {
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({

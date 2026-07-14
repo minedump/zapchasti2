@@ -42,14 +42,6 @@ export default function DashboardPage() {
   const PAGE_SIZE = 15;
   // 'instant' | 'smooth' | null
   const pendingScrollRef = useRef<'instant' | 'smooth' | null>(null);
-  // Актуальные chats/selectedChat для колбэка realtime-подписки на уведомления
-  // (замыкание создаётся один раз при монтировании).
-  const chatsRef = useRef<any[]>([]);
-  const selectedChatRef = useRef<any>(null);
-
-  useEffect(() => { chatsRef.current = chats; }, [chats]);
-  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
-
   // Счётчик непрочитанных в заголовке вкладки
   useEffect(() => {
     const total = chats.reduce((sum, c) => sum + (c.unread_count || 0), 0);
@@ -78,36 +70,15 @@ export default function DashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => fetchChats())
       .subscribe();
 
-    // Браузерные уведомления: входящее от клиента в чат с включённым
-    // колокольчиком (chats.notify_on_message) — если этот чат не открыт
-    // в сфокусированной вкладке прямо сейчас.
-    const notifChannel = supabase
-      .channel('global-message-notifications')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-        const msg: any = payload.new;
-        if (msg.is_from_bot || msg.sender_id) return;
-        const chat = chatsRef.current.find(c => c.id === msg.chat_id);
-        if (!chat?.notify_on_message) return;
-        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-        const isOpenAndVisible = selectedChatRef.current?.id === msg.chat_id && document.visibilityState === 'visible';
-        if (isOpenAndVisible) return;
+    // Service worker для Web Push (уведомления приходят с сервера через
+    // webhook — работают и при закрытой вкладке, и на iOS в PWA).
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.error('service worker registration failed:', err);
+      });
+    }
 
-        const n = new Notification(chat.customer_name || 'Клиент', {
-          body: String(msg.content ?? '').slice(0, 140),
-          tag: msg.chat_id, // новое сообщение того же чата заменяет предыдущее уведомление
-        });
-        n.onclick = () => {
-          window.focus();
-          handleChatSelect(chat);
-          n.close();
-        };
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(chatChannel);
-      supabase.removeChannel(notifChannel);
-    };
+    return () => { supabase.removeChannel(chatChannel); };
   }, []);
 
   // Close dropdowns on outside click
@@ -194,22 +165,54 @@ export default function DashboardPage() {
     await supabase.from('chats').update({ unread_count: 0 }).eq('id', chatId);
   };
 
+  // Подписывает это устройство на Web Push (идемпотентно) — вызывается при
+  // каждом включении колокольчика, чтобы новое устройство (например, PWA на
+  // iPhone) тоже попало в рассылку.
+  const subscribeDeviceToPush = async (): Promise<boolean> => {
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !vapidKey) {
+      toast.error('Этот браузер не поддерживает push-уведомления');
+      return false;
+    }
+    if (Notification.permission === 'denied') {
+      toast.error('Уведомления заблокированы в настройках браузера');
+      return false;
+    }
+    if (Notification.permission === 'default') {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        toast.error('Браузер не дал разрешение на уведомления');
+        return false;
+      }
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKey,
+      });
+      const res = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription, userAgent: navigator.userAgent }),
+      });
+      if (!res.ok) throw new Error('subscribe API failed');
+      return true;
+    } catch (err) {
+      console.error('push subscribe failed:', err);
+      toast.error('Не удалось подписаться на уведомления');
+      return false;
+    }
+  };
+
   const toggleChatNotifications = async () => {
     if (!selectedChat) return;
     const turningOn = !selectedChat.notify_on_message;
 
-    if (turningOn && typeof Notification !== 'undefined') {
-      if (Notification.permission === 'denied') {
-        toast.error('Уведомления заблокированы в настройках браузера');
-        return;
-      }
-      if (Notification.permission === 'default') {
-        const permission = await Notification.requestPermission();
-        if (permission !== 'granted') {
-          toast.error('Браузер не дал разрешение на уведомления');
-          return;
-        }
-      }
+    if (turningOn) {
+      const subscribed = await subscribeDeviceToPush();
+      if (!subscribed) return;
     }
 
     const { error } = await supabase.from('chats').update({ notify_on_message: turningOn }).eq('id', selectedChat.id);

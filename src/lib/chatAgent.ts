@@ -427,6 +427,17 @@ export async function processIncomingMessage(chatData: any, text: string, sender
     is_from_bot: false
   }]);
 
+  // Web Push оператору, если на чате включён колокольчик. Не блокируем
+  // обработку сообщения — уведомление вторично.
+  if (chatData.notify_on_message) {
+    const { sendPushToAll } = await import('@/lib/webPush');
+    sendPushToAll({
+      title: chatData.customer_name || 'Клиент',
+      body: text.slice(0, 140),
+      chatId: chatData.id,
+    }).catch((err) => console.error('push notification failed:', err));
+  }
+
   // 2. Если это команда (начинается с /)
   if (text.startsWith('/')) {
     // Блокируем переключение, только если уже идёт другая команда,
