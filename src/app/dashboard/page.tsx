@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
-import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, Edit3, Check, X, Calendar, FileText } from 'lucide-react';
+import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, Edit3, Check, X, Calendar, FileText, Bell, BellOff } from 'lucide-react';
 import { TelegramIcon, WeChatIcon } from '@/components/icons';
 import { Badge, Button, Input, Skeleton, Toggle } from '@/components/ui';
 import { cn } from '@/lib/utils';
@@ -42,6 +42,19 @@ export default function DashboardPage() {
   const PAGE_SIZE = 15;
   // 'instant' | 'smooth' | null
   const pendingScrollRef = useRef<'instant' | 'smooth' | null>(null);
+  // Актуальные chats/selectedChat для колбэка realtime-подписки на уведомления
+  // (замыкание создаётся один раз при монтировании).
+  const chatsRef = useRef<any[]>([]);
+  const selectedChatRef = useRef<any>(null);
+
+  useEffect(() => { chatsRef.current = chats; }, [chats]);
+  useEffect(() => { selectedChatRef.current = selectedChat; }, [selectedChat]);
+
+  // Счётчик непрочитанных в заголовке вкладки
+  useEffect(() => {
+    const total = chats.reduce((sum, c) => sum + (c.unread_count || 0), 0);
+    document.title = total > 0 ? `(${total}) PromptFlow` : 'PromptFlow';
+  }, [chats]);
 
   // Scroll after messages state actually renders
   useEffect(() => {
@@ -65,7 +78,36 @@ export default function DashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chats' }, () => fetchChats())
       .subscribe();
 
-    return () => { supabase.removeChannel(chatChannel); };
+    // Браузерные уведомления: входящее от клиента в чат с включённым
+    // колокольчиком (chats.notify_on_message) — если этот чат не открыт
+    // в сфокусированной вкладке прямо сейчас.
+    const notifChannel = supabase
+      .channel('global-message-notifications')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        const msg: any = payload.new;
+        if (msg.is_from_bot || msg.sender_id) return;
+        const chat = chatsRef.current.find(c => c.id === msg.chat_id);
+        if (!chat?.notify_on_message) return;
+        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+        const isOpenAndVisible = selectedChatRef.current?.id === msg.chat_id && document.visibilityState === 'visible';
+        if (isOpenAndVisible) return;
+
+        const n = new Notification(chat.customer_name || 'Клиент', {
+          body: String(msg.content ?? '').slice(0, 140),
+          tag: msg.chat_id, // новое сообщение того же чата заменяет предыдущее уведомление
+        });
+        n.onclick = () => {
+          window.focus();
+          handleChatSelect(chat);
+          n.close();
+        };
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(chatChannel);
+      supabase.removeChannel(notifChannel);
+    };
   }, []);
 
   // Close dropdowns on outside click
@@ -147,6 +189,39 @@ export default function DashboardPage() {
     toast.success('Команда сброшена');
   };
 
+  const markChatRead = async (chatId: string) => {
+    setChats(prev => prev.map(c => c.id === chatId ? { ...c, unread_count: 0 } : c));
+    await supabase.from('chats').update({ unread_count: 0 }).eq('id', chatId);
+  };
+
+  const toggleChatNotifications = async () => {
+    if (!selectedChat) return;
+    const turningOn = !selectedChat.notify_on_message;
+
+    if (turningOn && typeof Notification !== 'undefined') {
+      if (Notification.permission === 'denied') {
+        toast.error('Уведомления заблокированы в настройках браузера');
+        return;
+      }
+      if (Notification.permission === 'default') {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') {
+          toast.error('Браузер не дал разрешение на уведомления');
+          return;
+        }
+      }
+    }
+
+    const { error } = await supabase.from('chats').update({ notify_on_message: turningOn }).eq('id', selectedChat.id);
+    if (error) {
+      toast.error('Не удалось сохранить настройку');
+      return;
+    }
+    setSelectedChat({ ...selectedChat, notify_on_message: turningOn });
+    setChats(prev => prev.map(c => c.id === selectedChat.id ? { ...c, notify_on_message: turningOn } : c));
+    toast.success(turningOn ? 'Уведомления по чату включены' : 'Уведомления по чату выключены');
+  };
+
   const startEditChatName = () => {
     setChatNameDraft(selectedChat.customer_name || '');
     setEditingChatName(true);
@@ -169,6 +244,7 @@ export default function DashboardPage() {
   const handleChatSelect = (chat: any) => {
     setSelectedChat(chat);
     setEditingChatName(false);
+    if (chat.unread_count > 0) markChatRead(chat.id);
     const newUrl = `${window.location.pathname}?chatId=${chat.id}`;
     window.history.pushState({ path: newUrl }, '', newUrl);
   };
@@ -202,6 +278,11 @@ export default function DashboardPage() {
             pendingScrollRef.current = 'smooth';
             return [...prev, payload.new];
           });
+          // Входящее в открытый чат при видимой вкладке — сразу прочитано
+          const msg: any = payload.new;
+          if (!msg.is_from_bot && !msg.sender_id && document.visibilityState === 'visible') {
+            markChatRead(selectedChat.id);
+          }
         })
         .subscribe();
 
@@ -458,11 +539,31 @@ export default function DashboardPage() {
                 <ChatAvatar name={chat.customer_name} color={chat.avatar_color} />
                 <div className="flex-1 text-left min-w-0">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="font-bold text-slate-800 truncate">{chat.customer_name || 'Клиент'}</span>
-                    <span className="text-[10px] text-slate-400 shrink-0">
+                    <span className={cn("font-bold truncate", chat.unread_count > 0 ? "text-slate-900" : "text-slate-800")}>
+                      {chat.customer_name || 'Клиент'}
+                    </span>
+                    <span className={cn(
+                      "text-[10px] shrink-0",
+                      chat.unread_count > 0 ? "text-blue-600 font-bold" : "text-slate-400"
+                    )}>
                       {new Date(chat.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
+                  {(chat.last_message_preview || chat.unread_count > 0) && (
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <span className={cn(
+                        "text-xs truncate",
+                        chat.unread_count > 0 ? "text-slate-800 font-medium" : "text-slate-400"
+                      )}>
+                        {chat.last_message_preview}
+                      </span>
+                      {chat.unread_count > 0 && (
+                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
+                          {chat.unread_count > 99 ? '99+' : chat.unread_count}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge
                       className="p-1.5"
@@ -530,26 +631,39 @@ export default function DashboardPage() {
                   </Badge>
                 )}
               </div>
-              <Button
-                variant={selectedChat.status === 'bot_processing' ? 'primary' : 'secondary'}
-                size="md"
-                onClick={async () => {
-                  const turningOff = selectedChat.status === 'bot_processing';
-                  const newStatus = turningOff ? 'operator_needed' : 'bot_processing';
-                  const updates: any = { status: newStatus };
-                  if (turningOff) updates.active_command_id = null;
-                  await supabase.from('chats').update(updates).eq('id', selectedChat.id);
-                  setSelectedChat({
-                    ...selectedChat,
-                    ...updates,
-                    ...(turningOff ? { active_command: null } : {})
-                  });
-                }}
-                className="gap-2 shrink-0"
-              >
-                <Bot size={16} />
-                {selectedChat.status === 'bot_processing' ? 'Бот активен' : 'Включить бота'}
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant={selectedChat.notify_on_message ? 'primary' : 'secondary'}
+                  size="md"
+                  onClick={toggleChatNotifications}
+                  title={selectedChat.notify_on_message
+                    ? 'Уведомления по этому чату включены — выключить'
+                    : 'Уведомлять о новых сообщениях в этом чате'}
+                  className="p-2.5"
+                >
+                  {selectedChat.notify_on_message ? <Bell size={16} /> : <BellOff size={16} />}
+                </Button>
+                <Button
+                  variant={selectedChat.status === 'bot_processing' ? 'primary' : 'secondary'}
+                  size="md"
+                  onClick={async () => {
+                    const turningOff = selectedChat.status === 'bot_processing';
+                    const newStatus = turningOff ? 'operator_needed' : 'bot_processing';
+                    const updates: any = { status: newStatus };
+                    if (turningOff) updates.active_command_id = null;
+                    await supabase.from('chats').update(updates).eq('id', selectedChat.id);
+                    setSelectedChat({
+                      ...selectedChat,
+                      ...updates,
+                      ...(turningOff ? { active_command: null } : {})
+                    });
+                  }}
+                  className="gap-2"
+                >
+                  <Bot size={16} />
+                  {selectedChat.status === 'bot_processing' ? 'Бот активен' : 'Включить бота'}
+                </Button>
+              </div>
             </div>
 
             <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="flex-1 p-4 overflow-y-auto space-y-4">
