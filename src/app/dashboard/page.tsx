@@ -850,7 +850,7 @@ export default function DashboardPage() {
             <h3 className="font-bold text-slate-800">Заказы и шаблоны</h3>
           </div>
           <CollapsibleSection
-            title="Заказы клиента"
+            title="Заказы"
             icon={<ShoppingBag size={18} className="text-blue-600" />}
             open={ordersPanelOpen}
             onToggle={() => setOrdersPanelOpen(v => !v)}
@@ -974,10 +974,7 @@ export default function DashboardPage() {
                 <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">
                   <ShoppingBag size={28} className="text-slate-300" />
                 </div>
-                <div className="text-center">
-                  <p className="text-sm font-medium text-slate-400">Заказов пока нет</p>
-                  <p className="text-xs text-slate-300 mt-1">Они появятся после опроса</p>
-                </div>
+                <p className="text-sm font-medium text-slate-400">Заказов пока нет</p>
               </div>
             )}
           </div>
@@ -1030,10 +1027,7 @@ export default function DashboardPage() {
                 <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center">
                   <FileText size={28} className="text-slate-300" />
                 </div>
-                <div className="text-center">
-                  <p className="text-sm font-medium text-slate-400">Шаблонов пока нет</p>
-                  <p className="text-xs text-slate-300 mt-1">Создайте их в разделе «Шаблоны»</p>
-                </div>
+                <p className="text-sm font-medium text-slate-400">Шаблонов пока нет</p>
               </div>
             )}
           </div>
