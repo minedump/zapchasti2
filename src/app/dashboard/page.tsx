@@ -10,6 +10,18 @@ import { cn } from '@/lib/utils';
 import { withBadge } from '@/lib/badge';
 import { toast, Toaster } from 'react-hot-toast';
 
+// base64url → ArrayBuffer для pushManager.subscribe: Chrome принимает ключ и
+// строкой, но Safari/WebKit (iPhone) — только BufferSource.
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const buffer = new ArrayBuffer(raw.length);
+  const output = new Uint8Array(buffer);
+  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
+  return buffer;
+}
+
 export default function DashboardPage() {
   const searchParams = useSearchParams();
   const chatIdFromUrl = searchParams.get('chatId');
@@ -170,8 +182,19 @@ export default function DashboardPage() {
   // iPhone) тоже попало в рассылку.
   const subscribeDeviceToPush = async (): Promise<boolean> => {
     const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !vapidKey) {
-      toast.error('Этот браузер не поддерживает push-уведомления');
+    if (!vapidKey) {
+      toast.error('VAPID-ключ не настроен в окружении сервера (NEXT_PUBLIC_VAPID_PUBLIC_KEY)');
+      return false;
+    }
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      // На iOS пуши доступны только в приложении, установленном на экран «Домой»
+      const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+      if (isIos && !isStandalone) {
+        toast.error('На iPhone: добавьте сайт на экран «Домой» через Safari и включите уведомления уже из установленного приложения');
+      } else {
+        toast.error('Этот браузер не поддерживает push-уведомления');
+      }
       return false;
     }
     if (Notification.permission === 'denied') {
@@ -188,20 +211,25 @@ export default function DashboardPage() {
 
     try {
       const registration = await navigator.serviceWorker.ready;
+      // Safari/WebKit не принимает VAPID-ключ строкой — только Uint8Array
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: vapidKey,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
       });
       const res = await fetch('/api/push/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ subscription, userAgent: navigator.userAgent }),
       });
-      if (!res.ok) throw new Error('subscribe API failed');
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `subscribe API: ${res.status}`);
+      }
       return true;
     } catch (err) {
       console.error('push subscribe failed:', err);
-      toast.error('Не удалось подписаться на уведомления');
+      const detail = err instanceof Error ? err.message : String(err);
+      toast.error(`Не удалось подписаться на уведомления: ${detail}`);
       return false;
     }
   };
