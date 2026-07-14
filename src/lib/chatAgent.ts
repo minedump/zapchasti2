@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { withBadge } from '@/lib/badge';
+import { withBadge, stripBadgePrefix } from '@/lib/badge';
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
@@ -96,11 +96,10 @@ export async function findOrCreateChat(opts: {
 // в messages, чтобы оператор видел его в CRM, а не только клиент в мессенджере.
 // is_from_bot: true + is_ai_generated: false отличает их от настоящих AI-ответов.
 async function sendServiceMessage(dbChatId: string, sender: ChatSender, text: string, badge: string | null) {
-  const finalText = withBadge(text, badge);
-  await sender.send(finalText);
+  await sender.send(withBadge(text, badge));
   await supabaseAdmin.from('messages').insert([{
     chat_id: dbChatId,
-    content: finalText,
+    content: text,
     is_from_bot: true,
     is_ai_generated: false,
     badge
@@ -123,14 +122,16 @@ async function sendSystemMessage(dbChatId: string, sender: ChatSender, text: str
 // созданному заказу); передаётся явно, потому что chatData в момент старта
 // команды ещё содержит старый active_command_id.
 async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: string, badge: string | null, commandId: string | null) {
+  // Модель могла скопировать бейдж-подпись из старой истории — вырезаем,
+  // чтобы `[Бейдж]` не задваивался с тем, что добавит withBadge при отправке.
+  aiResponse = stripBadgePrefix(aiResponse, badge);
   const resultMatch = aiResponse.match(RESULT_TAG);
 
   if (!resultMatch) {
-    const finalText = withBadge(aiResponse, badge);
-    await sender.send(finalText);
+    await sender.send(withBadge(aiResponse, badge));
     await supabaseAdmin.from('messages').insert([{
       chat_id: chatData.id,
-      content: finalText,
+      content: aiResponse,
       is_from_bot: true,
       is_ai_generated: true,
       badge
@@ -254,7 +255,7 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
 
   await supabaseAdmin.from('messages').insert([{
     chat_id: chatData.id,
-    content: withBadge(bodyText, badge),
+    content: bodyText,
     is_from_bot: true,
     is_ai_generated: true,
     badge
@@ -401,7 +402,13 @@ async function askDeepSeek(history: any[], systemPromptBase: string, collectedDa
     ? `${systemPromptBase}\n\nТЕКУЩИЕ ДАННЫЕ: ${JSON.stringify(collectedData)}`
     : systemPromptBase;
 
-  return callDeepSeek(systemPrompt, history.map(m => ({ role: m.is_from_bot ? 'assistant' : 'user', content: m.content })), meta);
+  // Старые сообщения хранят бейдж-подпись прямо в content — вырезаем её из
+  // истории для модели, иначе она начинает копировать `[Бейдж]` в свои ответы.
+  return callDeepSeek(
+    systemPrompt,
+    history.map(m => ({ role: m.is_from_bot ? 'assistant' : 'user', content: stripBadgePrefix(m.content, m.badge) })),
+    meta
+  );
 }
 
 /**

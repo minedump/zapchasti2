@@ -7,7 +7,7 @@ import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus,
 import { TelegramIcon, WeChatIcon } from '@/components/icons';
 import { Badge, Button, Input, Skeleton, Toggle } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { withBadge } from '@/lib/badge';
+import { withBadge, stripBadgePrefix } from '@/lib/badge';
 import { toast, Toaster } from 'react-hot-toast';
 
 // base64url → ArrayBuffer для pushManager.subscribe: Chrome принимает ключ и
@@ -465,12 +465,14 @@ export default function DashboardPage() {
       badge = labelRow?.badge ?? null;
     }
 
+    // В мессенджер уходит текст с бейджем-подписью, в базе храним чистый
+    // (бейдж — отдельной колонкой, UI рендерит его сам).
     const finalText = withBadge(newMessage, badge);
 
     // 1. Сохраняем в базу
     const { error } = await supabase.from('messages').insert([{
       chat_id: selectedChat.id,
-      content: finalText,
+      content: newMessage,
       sender_id: user?.id,
       is_from_bot: false,
       badge
@@ -760,7 +762,10 @@ export default function DashboardPage() {
                           ? 'bg-blue-600 text-white rounded-br-none'
                           : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-sm'
                     }`}>
-                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      {msg.badge && (
+                        <span className="text-[10px] font-bold uppercase tracking-wide opacity-60 block mb-1">{msg.badge}</span>
+                      )}
+                      <p className="text-sm whitespace-pre-wrap">{stripBadgePrefix(msg.content, msg.badge)}</p>
                       <span className="text-[10px] opacity-50 mt-1 block text-right">
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         {msg.is_from_bot && (msg.is_ai_generated ? ' • AI' : ' • Система')}

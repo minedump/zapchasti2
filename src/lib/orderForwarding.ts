@@ -92,13 +92,12 @@ export async function runForwardRules(order: { id: string; data: any; order_numb
         content = formatOrderData(order.data);
       }
 
-      const finalContent = withBadge(content, badge);
       const sender = getSenderForChat(targetChat);
-      await sender.send(finalContent);
+      await sender.send(withBadge(content, badge));
 
       await supabaseAdmin.from('messages').insert([{
         chat_id: targetChat.id,
-        content: finalContent,
+        content,
         is_from_bot: true,
         is_ai_generated: isAiGenerated,
         badge,
