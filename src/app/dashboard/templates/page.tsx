@@ -92,12 +92,12 @@ export default function TemplatesPage() {
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-      <div className="p-8 max-w-5xl mx-auto w-full flex-1">
+      <div className="p-4 md:p-8 max-w-5xl mx-auto w-full flex-1">
         <Toaster position="top-right" />
 
         <div className="flex justify-end md:justify-between items-center mb-4 md:mb-8">
           <h1 className="hidden md:block text-3xl font-bold text-slate-900">Шаблоны</h1>
-          <Button onClick={handleAdd} className="gap-2">
+          <Button onClick={handleAdd} className="gap-2 w-full md:w-auto justify-center">
             <Plus size={18} /> Создать шаблон
           </Button>
         </div>
@@ -122,7 +122,7 @@ export default function TemplatesPage() {
                 editingId === tpl.id ? "border-blue-500 ring-4 ring-blue-50" : "border-slate-200 hover:border-slate-300"
               )}>
                 {editingId === tpl.id ? (
-                  <div className="p-6 space-y-4">
+                  <div className="p-4 md:p-6 space-y-4">
                     <div className="flex items-center gap-3">
                       <Input
                         placeholder="Заголовок шаблона, напр. «Статус заказа»"
@@ -184,8 +184,8 @@ export default function TemplatesPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="p-6">
-                    <div className="flex items-start justify-between mb-3">
+                  <div className="p-4 md:p-6">
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-3">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-slate-800">{tpl.title}</h3>
                         <Badge variant={tpl.is_active ? 'green' : 'neutral'}>
@@ -198,11 +198,11 @@ export default function TemplatesPage() {
                           <Badge>с уточнением</Badge>
                         )}
                       </div>
-                      <div className="flex gap-2 shrink-0">
-                        <Button variant="secondary" className="gap-2" onClick={() => handleEdit(tpl)}>
+                      <div className="flex gap-2 shrink-0 w-full md:w-auto">
+                        <Button variant="secondary" className="gap-2 flex-1 md:flex-initial justify-center" onClick={() => handleEdit(tpl)}>
                           <Edit3 size={16} /> Редактировать
                         </Button>
-                        <Button variant="danger" className="gap-2" onClick={() => handleDelete(tpl.id)}>
+                        <Button variant="danger" className="gap-2 flex-1 md:flex-initial justify-center" onClick={() => handleDelete(tpl.id)}>
                           <Trash2 size={16} /> Удалить
                         </Button>
                       </div>

@@ -203,18 +203,18 @@ export default function WeChatPage() {
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-      <div className="p-8 max-w-5xl mx-auto w-full flex-1">
+      <div className="p-4 md:p-8 max-w-5xl mx-auto w-full flex-1">
         <Toaster position="top-right" />
 
         <div className="flex justify-end md:justify-between items-center mb-4 md:mb-8">
           <h1 className="hidden md:block text-3xl font-bold text-slate-900">WeChat</h1>
-          <Button onClick={() => setShowAdd((v) => !v)} className="gap-2">
+          <Button onClick={() => setShowAdd((v) => !v)} className="gap-2 w-full md:w-auto justify-center">
             <Plus size={18} /> Подключить аккаунт
           </Button>
         </div>
 
         {showAdd && (
-          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2">
+          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center gap-2">
             <Input
               placeholder="Имя аккаунта, например Продажи-1"
               value={newLabel}
@@ -260,7 +260,7 @@ export default function WeChatPage() {
                   isEditing ? "border-blue-500 ring-4 ring-blue-50" : "border-slate-200 hover:border-slate-300"
                 )}>
                   {isEditing ? (
-                    <div className="p-6 space-y-4">
+                    <div className="p-4 md:p-6 space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1.5 block">Имя аккаунта</label>
@@ -289,8 +289,8 @@ export default function WeChatPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="p-6">
-                      <div className="flex items-start justify-between mb-4">
+                    <div className="p-4 md:p-6">
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-4">
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-slate-800">{acc.label}</span>
@@ -300,21 +300,21 @@ export default function WeChatPage() {
                             <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
                           </div>
                         </div>
-                        <div className="flex gap-2 shrink-0">
+                        <div className="flex flex-wrap gap-2 shrink-0 w-full md:w-auto">
                           {acc.chat_id && (
-                            <Button variant="secondary" className="gap-2" onClick={() => router.push(`/dashboard?chatId=${acc.chat_id}`)}>
+                            <Button variant="secondary" className="gap-2 flex-1 md:flex-initial justify-center" onClick={() => router.push(`/dashboard?chatId=${acc.chat_id}`)}>
                               <MessageCircle size={16} /> Открыть чат
                             </Button>
                           )}
                           {(acc.status === 'error' || acc.status === 'expired' || acc.status === 'not_started') && (
-                            <Button variant="secondary" className="gap-2" onClick={() => retryAccount(acc.bot_name)}>
+                            <Button variant="secondary" className="gap-2 flex-1 md:flex-initial justify-center" onClick={() => retryAccount(acc.bot_name)}>
                               <RefreshCw size={16} /> Повторить
                             </Button>
                           )}
-                          <Button variant="secondary" className="gap-2" onClick={() => startEditLabel(acc)}>
+                          <Button variant="secondary" className="gap-2 flex-1 md:flex-initial justify-center" onClick={() => startEditLabel(acc)}>
                             <Edit3 size={16} /> Редактировать
                           </Button>
-                          <Button variant="danger" className="gap-2" onClick={() => deleteAccount(acc.bot_name, acc.label)}>
+                          <Button variant="danger" className="gap-2 flex-1 md:flex-initial justify-center" onClick={() => deleteAccount(acc.bot_name, acc.label)}>
                             <Trash2 size={16} /> Удалить
                           </Button>
                         </div>

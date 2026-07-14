@@ -105,7 +105,7 @@ export default function OrdersPage() {
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
     <Toaster position="top-right" />
-    <div className="p-8 max-w-5xl mx-auto w-full flex-1">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto w-full flex-1">
 
       {/* Header */}
       <h1 className="hidden md:block text-3xl font-bold text-slate-900 mb-8">Заказы</h1>
@@ -197,7 +197,7 @@ export default function OrdersPage() {
             const orderTagIds = new Set((order.order_tags || []).map((ot: any) => ot.tag_id));
             const activeTagList = (order.order_tags || []).map((ot: any) => ot.tags).filter(Boolean);
             return (
-            <div key={order.id} className="bg-white p-6 rounded-2xl border border-slate-200 hover:border-slate-300 transition-all">
+            <div key={order.id} className="bg-white p-4 md:p-6 rounded-2xl border border-slate-200 hover:border-slate-300 transition-all">
               <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div className="space-y-2 flex-1 min-w-0">
                   {/* Row 1: Заказ №4 + статус + оплата */}

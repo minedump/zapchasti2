@@ -698,7 +698,9 @@ export default function DashboardPage() {
                   className="gap-2"
                 >
                   <Bot size={16} />
-                  {selectedChat.status === 'bot_processing' ? 'Бот активен' : 'Включить бота'}
+                  <span className="hidden sm:inline">
+                    {selectedChat.status === 'bot_processing' ? 'Бот активен' : 'Включить бота'}
+                  </span>
                 </Button>
               </div>
             </div>

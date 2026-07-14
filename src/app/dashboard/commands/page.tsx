@@ -214,16 +214,16 @@ export default function CommandsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-    <div className="p-8 max-w-5xl mx-auto w-full flex-1">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto w-full flex-1">
       <Toaster position="top-right" />
 
-      <div className="flex justify-end md:justify-between items-center mb-4 md:mb-8">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4 md:mb-8">
         <h1 className="hidden md:block text-3xl font-bold text-slate-900">Команды</h1>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => { window.location.href = '/dashboard/docs'; }} className="gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button variant="secondary" onClick={() => { window.location.href = '/dashboard/docs'; }} className="gap-2 justify-center">
             <HelpCircle size={18} /> Документация
           </Button>
-          <Button onClick={handleAdd} className="gap-2">
+          <Button onClick={handleAdd} className="gap-2 justify-center">
             <Plus size={18} /> Создать команду
           </Button>
         </div>
@@ -242,7 +242,7 @@ export default function CommandsPage() {
               )}
             >
               {editingId === cmd.id ? (
-                <div className="p-6 space-y-4">
+                <div className="p-4 md:p-6 space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <label className="text-xs font-bold text-slate-500 uppercase ml-1">Команда (необязательно)</label>
@@ -376,45 +376,47 @@ export default function CommandsPage() {
                   </div>
                 </div>
               ) : (
-                <div className="p-6">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex flex-col md:flex-row md:items-center gap-2 flex-wrap">
-                      {cmd.command ? (
-                        <Badge mono>{cmd.command}</Badge>
-                      ) : cmd.is_default ? null : (
-                        <Badge>только для пересылки</Badge>
-                      )}
-                      {cmd.is_default && (
-                        <Badge variant="green">по умолчанию</Badge>
-                      )}
-                      {!cmd.is_active && (
-                        <Badge variant="red">выключена</Badge>
-                      )}
-                      {cmd.channel && (
-                        <Badge>{cmd.channel}</Badge>
-                      )}
-                      {cmd.badge && (
-                        <Badge>{cmd.badge}</Badge>
-                      )}
-                      {cmd.starts_dialog && (
-                        <Badge variant="green">диалог</Badge>
-                      )}
-                      {cmd.receives_chat_orders && (
-                        <Badge color="#2563eb">видит заказы</Badge>
-                      )}
-                      {cmd.knowledge_mode && cmd.knowledge_mode !== 'none' && (
-                        <Badge color="#7c3aed">
-                          {cmd.knowledge_mode === 'all' ? 'вся база знаний' : `статьи: ${(cmd.command_knowledge ?? []).length}`}
-                        </Badge>
-                      )}
+                <div className="p-4 md:p-6">
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-4">
+                    <div className="space-y-2 min-w-0">
                       <h3 className="font-semibold text-slate-800">{cmd.description || 'Без описания'}</h3>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {cmd.command ? (
+                          <Badge mono>{cmd.command}</Badge>
+                        ) : cmd.is_default ? null : (
+                          <Badge>только для пересылки</Badge>
+                        )}
+                        {cmd.is_default && (
+                          <Badge variant="green">по умолчанию</Badge>
+                        )}
+                        {!cmd.is_active && (
+                          <Badge variant="red">выключена</Badge>
+                        )}
+                        {cmd.channel && (
+                          <Badge>{cmd.channel}</Badge>
+                        )}
+                        {cmd.badge && (
+                          <Badge>{cmd.badge}</Badge>
+                        )}
+                        {cmd.starts_dialog && (
+                          <Badge variant="green">диалог</Badge>
+                        )}
+                        {cmd.receives_chat_orders && (
+                          <Badge color="#2563eb">видит заказы</Badge>
+                        )}
+                        {cmd.knowledge_mode && cmd.knowledge_mode !== 'none' && (
+                          <Badge color="#7c3aed">
+                            {cmd.knowledge_mode === 'all' ? 'вся база знаний' : `статьи: ${(cmd.command_knowledge ?? []).length}`}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                      <Button variant="secondary" className="gap-2" onClick={() => handleEdit(cmd)}>
+                    <div className="flex gap-2 shrink-0 w-full md:w-auto">
+                      <Button variant="secondary" className="gap-2 flex-1 md:flex-initial justify-center" onClick={() => handleEdit(cmd)}>
                         <Edit3 size={16} /> Редактировать
                       </Button>
                       {!cmd.is_default && (
-                        <Button variant="danger" className="gap-2" onClick={() => handleDelete(cmd)}>
+                        <Button variant="danger" className="gap-2 flex-1 md:flex-initial justify-center" onClick={() => handleDelete(cmd)}>
                           <Trash2 size={16} /> Удалить
                         </Button>
                       )}
@@ -432,12 +434,12 @@ export default function CommandsPage() {
 
       {/* === База знаний === */}
       <div className="mt-12">
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4">
           <div className="flex items-center gap-2">
             <BookOpen size={20} className="text-blue-600" />
             <h2 className="text-xl font-bold text-slate-900">База знаний</h2>
           </div>
-          <Button variant="secondary" className="gap-2" onClick={() => setShowAddArticle(v => !v)}>
+          <Button variant="secondary" className="gap-2 justify-center" onClick={() => setShowAddArticle(v => !v)}>
             <Plus size={16} /> Добавить статью
           </Button>
         </div>
@@ -506,7 +508,7 @@ export default function CommandsPage() {
           <ScrollText size={20} className="text-blue-600" />
           <h2 className="text-xl font-bold text-slate-900">Журнал AI</h2>
         </div>
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden overflow-x-auto">
           {log.length === 0 ? (
             <p className="text-sm text-slate-400 p-6 text-center">Обращений к AI пока не было</p>
           ) : (

@@ -18,20 +18,20 @@ export default function DocsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-      <div className="p-8 max-w-4xl mx-auto w-full flex-1">
+      <div className="p-4 md:p-8 max-w-4xl mx-auto w-full flex-1">
         <h1 className="hidden md:block text-3xl font-bold text-slate-900 mb-8">Документация</h1>
 
-        <div className="flex gap-1.5 mb-8 bg-slate-100 p-1.5 rounded-2xl w-fit">
+        <div className="flex gap-1.5 mb-8 bg-slate-100 p-1.5 rounded-2xl w-full md:w-fit">
           {TABS.map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               className={cn(
-                'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all focus-visible:outline-none',
+                'flex flex-1 md:flex-initial items-center justify-center gap-2 px-2 md:px-4 py-2 rounded-xl text-sm font-semibold transition-all focus-visible:outline-none',
                 tab === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               )}
             >
-              {t.icon} {t.label}
+              <span className="hidden sm:inline">{t.icon}</span> {t.label}
             </button>
           ))}
         </div>

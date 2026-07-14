@@ -156,12 +156,12 @@ export default function TriggersPage() {
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-      <div className="p-8 max-w-5xl mx-auto w-full flex-1">
+      <div className="p-4 md:p-8 max-w-5xl mx-auto w-full flex-1">
         <Toaster position="top-right" />
 
         <div className="flex justify-end md:justify-between items-center mb-4 md:mb-8">
           <h1 className="hidden md:block text-3xl font-bold text-slate-900">Триггеры</h1>
-          <Button onClick={handleAdd} className="gap-2">
+          <Button onClick={handleAdd} className="gap-2 w-full md:w-auto justify-center">
             <Plus size={18} /> Создать правило
           </Button>
         </div>
@@ -186,7 +186,7 @@ export default function TriggersPage() {
                 editingId === rule.id ? "border-blue-500 ring-4 ring-blue-50" : "border-slate-200 hover:border-slate-300"
               )}>
                 {editingId === rule.id ? (
-                  <div className="p-6 space-y-4">
+                  <div className="p-4 md:p-6 space-y-4">
                     <div className="flex items-center gap-3">
                       <Input
                         placeholder="Название правила"
@@ -212,14 +212,14 @@ export default function TriggersPage() {
                       <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1.5 block">Условия (все должны совпасть)</label>
                       <div className="space-y-2">
                         {editForm.conditions.map((c: Condition, i: number) => (
-                          <div key={i} className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-2">
+                          <div key={i} className="flex flex-wrap items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl p-2">
                             <Input
                               placeholder="поле, напр. model"
                               value={c.field_path}
                               onChange={e => updateCondition(i, 'field_path', e.target.value)}
-                              className="w-40 h-9"
+                              className="w-full sm:w-40 h-9"
                             />
-                            <Select value={c.operator} onChange={e => updateCondition(i, 'operator', e.target.value)} className="h-9 w-36">
+                            <Select value={c.operator} onChange={e => updateCondition(i, 'operator', e.target.value)} className="h-9 w-32 sm:w-36">
                               {Object.entries(OPERATOR_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                             </Select>
                             {c.operator !== 'is_empty' && c.operator !== 'is_not_empty' && (
@@ -227,7 +227,7 @@ export default function TriggersPage() {
                                 placeholder="значение"
                                 value={c.value}
                                 onChange={e => updateCondition(i, 'value', e.target.value)}
-                                className="flex-1 h-9"
+                                className="flex-1 min-w-[100px] h-9"
                               />
                             )}
                             <Button variant="ghost" size="sm" className="p-1.5 shrink-0" onClick={() => removeCondition(i)}>
@@ -266,19 +266,19 @@ export default function TriggersPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="p-6">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
+                  <div className="p-4 md:p-6">
+                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         <h3 className="font-semibold text-slate-800">{rule.name}</h3>
                         <Badge variant={rule.is_active ? 'green' : 'neutral'}>
                           {rule.is_active ? 'активно' : 'выключено'}
                         </Badge>
                       </div>
-                      <div className="flex gap-2 shrink-0">
-                        <Button variant="secondary" className="gap-2" onClick={() => handleEdit(rule)}>
+                      <div className="flex gap-2 shrink-0 w-full md:w-auto">
+                        <Button variant="secondary" className="gap-2 flex-1 md:flex-initial justify-center" onClick={() => handleEdit(rule)}>
                           <Edit3 size={16} /> Редактировать
                         </Button>
-                        <Button variant="danger" className="gap-2" onClick={() => handleDelete(rule.id)}>
+                        <Button variant="danger" className="gap-2 flex-1 md:flex-initial justify-center" onClick={() => handleDelete(rule.id)}>
                           <Trash2 size={16} /> Удалить
                         </Button>
                       </div>
@@ -298,7 +298,7 @@ export default function TriggersPage() {
         </div>
 
         <h2 className="text-xl font-bold text-slate-900 mb-4">Журнал</h2>
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden overflow-x-auto">
           {log.length === 0 ? (
             <p className="text-sm text-slate-400 p-6 text-center">Пока ничего не пересылалось</p>
           ) : (

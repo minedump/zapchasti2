@@ -71,7 +71,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-    <div className="p-8 max-w-5xl mx-auto w-full flex-1">
+    <div className="p-4 md:p-8 max-w-5xl mx-auto w-full flex-1">
       <Toaster />
 
       <h1 className="hidden md:block text-3xl font-bold text-slate-900 mb-8">Настройки</h1>
@@ -206,7 +206,7 @@ function Section({ icon, title, description, action, children }: {
 }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 md:px-6 py-4 border-b border-slate-100">
         <div className="flex items-center gap-3">
           <span className="text-blue-600">{icon}</span>
           <div>
@@ -216,7 +216,7 @@ function Section({ icon, title, description, action, children }: {
         </div>
         {action}
       </div>
-      <div className="p-6">{children}</div>
+      <div className="p-4 md:p-6">{children}</div>
     </div>
   );
 }
@@ -231,7 +231,7 @@ function AddRow({ colorValue, onColorChange, nameValue, onNameChange, placeholde
   onCancel: () => void;
 }) {
   return (
-    <div className="mb-3 flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+    <div className="mb-3 flex flex-wrap items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
       <input
         type="color"
         value={colorValue}
