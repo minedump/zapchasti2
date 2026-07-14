@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useSearchParams } from 'next/navigation';
-import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, Edit3, Check, X, Calendar, FileText, Bell, BellOff, ArrowLeft } from 'lucide-react';
+import { Search, Send, Bot, ShoppingBag, User, MessageSquare, ChevronDown, Plus, Edit3, Check, X, Calendar, FileText, Bell, BellOff, ArrowLeft, MoreVertical } from 'lucide-react';
 import { TelegramIcon, WeChatIcon } from '@/components/icons';
 import { Badge, Button, Input, Skeleton, Toggle } from '@/components/ui';
 import { cn } from '@/lib/utils';
@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [ordersPanelOpen, setOrdersPanelOpen] = useState(true);
   const [templatesPanelOpen, setTemplatesPanelOpen] = useState(true);
+  const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
   const [pendingTemplateId, setPendingTemplateId] = useState<string | null>(null);
   const [extraAnswerDraft, setExtraAnswerDraft] = useState('');
   const [sendingTemplateId, setSendingTemplateId] = useState<string | null>(null);
@@ -275,6 +276,7 @@ export default function DashboardPage() {
   const handleChatSelect = (chat: any) => {
     setSelectedChat(chat);
     setEditingChatName(false);
+    setMobileInfoOpen(false);
     if (chat.unread_count > 0) markChatRead(chat.id);
     const newUrl = `${window.location.pathname}?chatId=${chat.id}`;
     window.history.pushState({ path: newUrl }, '', newUrl);
@@ -283,6 +285,7 @@ export default function DashboardPage() {
   // Возврат к списку чатов (мобильный режим: список ↔ чат, как в Telegram)
   const closeChat = () => {
     setSelectedChat(null);
+    setMobileInfoOpen(false);
     window.history.pushState({}, '', window.location.pathname);
   };
 
@@ -654,13 +657,14 @@ export default function DashboardPage() {
           <>
             <div className="h-[65px] px-4 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm">
               <div className="flex items-center gap-2 min-w-0">
-                <button
+                <Button
+                  variant="secondary"
                   onClick={closeChat}
                   title="К списку чатов"
-                  className="md:hidden shrink-0 w-9 h-9 -ml-1.5 flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 transition-colors focus-visible:outline-none"
+                  className="md:hidden shrink-0 w-10 h-10 p-0"
                 >
-                  <ArrowLeft size={20} />
-                </button>
+                  <ArrowLeft size={18} />
+                </Button>
                 {editingChatName ? (
                   <div className="flex items-center gap-1.5">
                     <Input
@@ -706,7 +710,7 @@ export default function DashboardPage() {
                   title={selectedChat.notify_on_message
                     ? 'Уведомления по этому чату включены — выключить'
                     : 'Уведомлять о новых сообщениях в этом чате'}
-                  className="p-2.5"
+                  className="w-10 h-10 p-0"
                 >
                   {selectedChat.notify_on_message ? <Bell size={16} /> : <BellOff size={16} />}
                 </Button>
@@ -725,12 +729,21 @@ export default function DashboardPage() {
                       ...(turningOff ? { active_command: null } : {})
                     });
                   }}
-                  className="gap-2"
+                  className="w-10 h-10 p-0 sm:w-auto sm:h-auto sm:px-4 sm:py-2 sm:gap-2"
                 >
                   <Bot size={16} />
                   <span className="hidden sm:inline">
                     {selectedChat.status === 'bot_processing' ? 'Бот активен' : 'Включить бота'}
                   </span>
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={() => setMobileInfoOpen(true)}
+                  title="Заказы и шаблоны"
+                  className="md:hidden w-10 h-10 p-0"
+                >
+                  <MoreVertical size={18} />
                 </Button>
               </div>
             </div>
@@ -803,9 +816,21 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Right Info Panel */}
+      {/* Right Info Panel: на десктопе — третья колонка, на мобиле — полноэкранная
+          панель, открывается кнопкой с точками в шапке чата */}
       {selectedChat && (
-        <div className="hidden md:flex w-80 border-l border-slate-200 bg-slate-50/30 flex-col overflow-y-auto">
+        <div className={cn(
+          "flex-col bg-slate-50/30 overflow-y-auto",
+          mobileInfoOpen
+            ? "flex fixed inset-0 z-50 bg-slate-50 md:static md:z-auto md:w-80 md:bg-slate-50/30 md:border-l md:border-slate-200"
+            : "hidden md:flex md:w-80 md:border-l md:border-slate-200"
+        )}>
+          <div className="md:hidden h-[65px] px-4 border-b border-slate-200 bg-white flex items-center justify-between shrink-0">
+            <h3 className="font-bold text-slate-800">Заказы и шаблоны</h3>
+            <Button variant="secondary" className="w-10 h-10 p-0" onClick={() => setMobileInfoOpen(false)} title="Закрыть">
+              <X size={18} />
+            </Button>
+          </div>
           <CollapsibleSection
             title="Заказы клиента"
             icon={<ShoppingBag size={18} className="text-blue-600" />}
