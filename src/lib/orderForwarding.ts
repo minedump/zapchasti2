@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { runPromptOnData, stripResultTags, parseResultJson, omitPrivateFields } from '@/lib/chatAgent';
+import { runPromptOnData, stripResultTags, parseResultJson, omitPrivateFields, extractNotifyTags, extractBellTag, pushToOperator } from '@/lib/chatAgent';
 import { getSenderForChat } from '@/lib/channelSenders';
 import { withBadge, stripBadgePrefix } from '@/lib/badge';
 
@@ -43,7 +43,7 @@ function formatOrderData(data: any): string {
  * ключ status может переключить статус — тогда каскадом сработают правила
  * на новый статус (если он отличается от текущего, чтобы не зациклиться).
  */
-async function runProcessingRule(rule: any, order: ForwardableOrder, statusId: string): Promise<void> {
+async function runProcessingRule(rule: any, order: ForwardableOrder, statusId: string | null): Promise<void> {
   if (!rule.prompt_id) throw new Error('Для правила без пересылки нужен промпт');
 
   const { data: prompt } = await supabaseAdmin
@@ -73,7 +73,18 @@ async function runProcessingRule(rule: any, order: ForwardableOrder, statusId: s
     { chatId: order.chat_id ?? null, commandId: rule.prompt_id, source: 'forward' }
   );
 
-  const json = parseResultJson(raw);
+  const notifyTags = extractNotifyTags(raw);
+  if (notifyTags.notifications.length) {
+    pushToOperator(`Заказ №${order.order_number ?? ''}`.trim(), notifyTags.notifications.join(' · '), order.chat_id);
+  }
+
+  // <BELL> в обработке без пересылки управляет колокольчиком чата заказа
+  const bellTag = extractBellTag(notifyTags.text);
+  if (bellTag.value !== undefined && order.chat_id) {
+    await supabaseAdmin.from('chats').update({ notify_on_message: bellTag.value }).eq('id', order.chat_id);
+  }
+
+  const json = parseResultJson(bellTag.text);
   if (!json) return; // промпт ничего не вернул — заказ не трогаем
 
   const extraData: Record<string, any> = { ...json };
@@ -108,10 +119,9 @@ async function runProcessingRule(rule: any, order: ForwardableOrder, statusId: s
 }
 
 /**
- * Runs every active order_forward_rule whose trigger_status_id matches
- * statusId (covers both "on create as Новый" and "on transition to X" —
- * both are just the order's status_id becoming that value). Matching rules
- * run independently — one failing doesn't block the others.
+ * Runs every active status-rule whose trigger_status_id matches statusId
+ * (covers both "on create as Новый" and "on transition to X" — both are just
+ * the order's status_id becoming that value).
  *
  * Цели правила (target_type):
  *  - 'chat'       — пересылка в фиксированный чат (target_chat_id);
@@ -125,9 +135,31 @@ export async function runForwardRules(order: ForwardableOrder, statusId: string)
     .from('order_forward_rules')
     .select('*, conditions:order_forward_conditions(*)')
     .eq('is_active', true)
+    .eq('trigger_event', 'status')
     .eq('trigger_status_id', statusId);
 
-  if (!rules?.length) return;
+  await runMatchingRules(rules ?? [], order, statusId);
+}
+
+/**
+ * Правила на смену отметки оплаты (trigger_event = 'paid' | 'unpaid') —
+ * например, "заказ оплачен → переслать поставщику выкуп". Вызывается из
+ * серверного роута тумблера оплаты.
+ */
+export async function runPaymentRules(order: ForwardableOrder, isPaid: boolean): Promise<void> {
+  const { data: rules } = await supabaseAdmin
+    .from('order_forward_rules')
+    .select('*, conditions:order_forward_conditions(*)')
+    .eq('is_active', true)
+    .eq('trigger_event', isPaid ? 'paid' : 'unpaid');
+
+  await runMatchingRules(rules ?? [], order, order.status_id ?? null);
+}
+
+// Общий исполнитель: условия, цель, промпт, лог. Правила независимы — ошибка
+// одного не блокирует остальные.
+async function runMatchingRules(rules: any[], order: ForwardableOrder, currentStatusId: string | null): Promise<void> {
+  if (!rules.length) return;
 
   for (const rule of rules) {
     const conditions: ForwardCondition[] = rule.conditions ?? [];
@@ -136,7 +168,7 @@ export async function runForwardRules(order: ForwardableOrder, statusId: string)
 
     try {
       if (rule.target_type === 'none') {
-        await runProcessingRule(rule, order, statusId);
+        await runProcessingRule(rule, order, currentStatusId);
         await supabaseAdmin.from('order_forward_log').insert([{
           rule_id: rule.id,
           order_id: order.id,
@@ -175,11 +207,19 @@ export async function runForwardRules(order: ForwardableOrder, statusId: string)
             { ...omitPrivateFields(order.data), order_number: order.order_number },
             { chatId: targetChat.id, commandId: rule.prompt_id, source: 'forward' }
           );
-          // Первое сообщение — всегда одноразовая трансформация текста, тег
-          // <RESULT> тут не нужен, но модель иногда всё равно его вставляет
-          // (например, если промпт написан в режиме диалога) — вырезаем,
-          // чтобы получателю не улетал сырой JSON в тегах.
-          content = stripResultTags(raw) || formatOrderData(order.data);
+          // Первое сообщение — всегда одноразовая трансформация текста, теги
+          // <RESULT>/<NOTIFY> тут не нужны, но модель может их вставить —
+          // NOTIFY отрабатывает пушом, RESULT вырезается, чтобы получателю
+          // не улетал сырой JSON в тегах.
+          const notifyTags = extractNotifyTags(raw);
+          if (notifyTags.notifications.length) {
+            pushToOperator(targetChat.customer_name || `Заказ №${order.order_number ?? ''}`.trim(), notifyTags.notifications.join(' · '), targetChat.id);
+          }
+          const bellTag = extractBellTag(notifyTags.text);
+          if (bellTag.value !== undefined) {
+            await supabaseAdmin.from('chats').update({ notify_on_message: bellTag.value }).eq('id', targetChat.id);
+          }
+          content = stripResultTags(bellTag.text) || formatOrderData(order.data);
           badge = prompt.badge ?? null;
           isAiGenerated = true;
           // Продолжать диалогом (ждать ответ и завершиться через <RESULT>)

@@ -28,11 +28,18 @@ const TARGET_LABELS: Record<string, string> = {
   none: 'без пересылки — обработать промптом',
 };
 
+const EVENT_LABELS: Record<string, string> = {
+  status: 'переход в статус',
+  paid: 'заказ оплачен',
+  unpaid: 'оплата снята',
+};
+
 interface Rule {
   id: string;
   name: string;
   is_active: boolean;
-  trigger_status_id: string;
+  trigger_event: 'status' | 'paid' | 'unpaid';
+  trigger_status_id: string | null;
   target_type: 'chat' | 'order_chat' | 'none';
   target_chat_id: string | null;
   prompt_id: string | null;
@@ -40,7 +47,7 @@ interface Rule {
 }
 
 const EMPTY_CONDITION: Condition = { field_path: '', operator: 'contains', value: '' };
-const EMPTY_RULE = { name: '', is_active: true, trigger_status_id: '', target_type: 'chat' as const, target_chat_id: '', prompt_id: null, conditions: [{ ...EMPTY_CONDITION }] };
+const EMPTY_RULE = { name: '', is_active: true, trigger_event: 'status' as const, trigger_status_id: '', target_type: 'chat' as const, target_chat_id: '', prompt_id: null, conditions: [{ ...EMPTY_CONDITION }] };
 
 export default function TriggersPage() {
   const [rules, setRules] = useState<Rule[]>([]);
@@ -87,6 +94,7 @@ export default function TriggersPage() {
     setEditingId(rule.id);
     setEditForm({
       ...rule,
+      trigger_event: rule.trigger_event ?? 'status',
       target_type: rule.target_type ?? 'chat',
       conditions: rule.conditions.length ? [...rule.conditions] : [{ ...EMPTY_CONDITION }],
     });
@@ -113,7 +121,7 @@ export default function TriggersPage() {
 
   const handleSave = async () => {
     if (!editForm.name.trim()) return toast.error('Укажите название правила');
-    if (!editForm.trigger_status_id) return toast.error('Выберите статус-триггер');
+    if (editForm.trigger_event === 'status' && !editForm.trigger_status_id) return toast.error('Выберите статус-триггер');
     if (editForm.target_type === 'chat' && !editForm.target_chat_id) return toast.error('Выберите чат для пересылки');
     if (editForm.target_type === 'none' && !editForm.prompt_id) return toast.error('Для правила без пересылки нужен промпт');
 
@@ -121,6 +129,7 @@ export default function TriggersPage() {
     const { isNew, conditions, ...payload } = editForm;
     payload.prompt_id = payload.prompt_id || null;
     payload.target_chat_id = editForm.target_type === 'chat' ? editForm.target_chat_id : null;
+    payload.trigger_status_id = editForm.trigger_event === 'status' ? editForm.trigger_status_id : null;
 
     let ruleId = editForm.id;
     if (isNew) {
@@ -213,12 +222,24 @@ export default function TriggersPage() {
                       </div>
                     </div>
 
-                    <div>
-                      <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1.5 block">Когда заказ переходит в статус</label>
-                      <Select value={editForm.trigger_status_id} onChange={e => setEditForm({ ...editForm, trigger_status_id: e.target.value })}>
-                        <option value="">Выберите статус…</option>
-                        {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </Select>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1.5 block">Событие</label>
+                        <Select value={editForm.trigger_event} onChange={e => setEditForm({ ...editForm, trigger_event: e.target.value })}>
+                          <option value="status">Заказ переходит в статус…</option>
+                          <option value="paid">Заказ отмечен оплаченным</option>
+                          <option value="unpaid">Отметка оплаты снята</option>
+                        </Select>
+                      </div>
+                      {editForm.trigger_event === 'status' && (
+                        <div>
+                          <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1.5 block">Статус</label>
+                          <Select value={editForm.trigger_status_id ?? ''} onChange={e => setEditForm({ ...editForm, trigger_status_id: e.target.value })}>
+                            <option value="">Выберите статус…</option>
+                            {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </Select>
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -315,7 +336,11 @@ export default function TriggersPage() {
                       </div>
                     </div>
                     <div className="text-sm text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                      Статус: <b className="text-slate-700">{statuses.find(s => s.id === rule.trigger_status_id)?.name ?? '—'}</b>
+                      Событие: <b className="text-slate-700">
+                        {rule.trigger_event === 'status' || !rule.trigger_event
+                          ? `статус «${statuses.find(s => s.id === rule.trigger_status_id)?.name ?? '—'}»`
+                          : EVENT_LABELS[rule.trigger_event]}
+                      </b>
                       {' · '}
                       Условия: {rule.conditions.length ? rule.conditions.map((c: Condition) => `${c.field_path} ${OPERATOR_LABELS[c.operator]}${c.value ? ` "${c.value}"` : ''}`).join(', ') : 'нет'}
                       {' → '}

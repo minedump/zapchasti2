@@ -33,6 +33,49 @@ export function stripResultTags(text: string): string {
   return text.replace(/<RESULT>[\s\S]*?<\/RESULT>/gi, '').trim();
 }
 
+// <NOTIFY>текст</NOTIFY> — пуш оператору из любого ответа модели, без
+// завершения команды и без <RESULT>: тег вырезается из видимого текста,
+// текст уходит уведомлением на устройства оператора.
+const NOTIFY_TAG = /<NOTIFY>([\s\S]*?)<\/NOTIFY>/gi;
+
+/** Extracts every <NOTIFY> tag: returns the reply without the tags plus the
+ * notification texts to push to the operator. */
+export function extractNotifyTags(text: string): { text: string; notifications: string[] } {
+  const notifications: string[] = [];
+  const cleaned = text.replace(NOTIFY_TAG, (_, body) => {
+    const t = String(body).trim();
+    if (t) notifications.push(t);
+    return '';
+  }).trim();
+  return { text: cleaned, notifications };
+}
+
+// <BELL>вкл</BELL> / <BELL>выкл</BELL> — колокольчик чата из любого ответа
+// модели (пуш оператору о следующем сообщении клиента). Тег вырезается из
+// видимого текста; понимает вкл/выкл/on/off/true/false.
+const BELL_TAG = /<BELL>([\s\S]*?)<\/BELL>/gi;
+
+/** Extracts <BELL> tags: returns the reply without them plus the last
+ * requested bell state (undefined when no valid tag present). */
+export function extractBellTag(text: string): { text: string; value?: boolean } {
+  let value: boolean | undefined;
+  const cleaned = text.replace(BELL_TAG, (_, body) => {
+    const v = String(body).trim().toLowerCase();
+    if (['вкл', 'on', 'true', '1', 'да'].includes(v)) value = true;
+    else if (['выкл', 'off', 'false', '0', 'нет'].includes(v)) value = false;
+    return '';
+  }).trim();
+  return { text: cleaned, value };
+}
+
+/** Fire-and-forget push to the operator's devices (used by <NOTIFY> tags and
+ * the notify_operator RESULT key). */
+export function pushToOperator(title: string, body: string, chatId?: string | null): void {
+  import('@/lib/webPush').then(({ sendPushToAll }) =>
+    sendPushToAll({ title, body: body.slice(0, 140), chatId: chatId ?? undefined })
+  ).catch((err) => console.error('operator push failed:', err));
+}
+
 /** Parses the JSON payload of the first <RESULT> tag, or null when the tag is
  * missing/empty/invalid. Used by no-forward trigger rules (orderForwarding). */
 export function parseResultJson(text: string): Record<string, any> | null {
@@ -95,9 +138,10 @@ export async function findOrCreateChat(opts: {
       [matchColumn]: matchValue,
       channel,
       customer_name: customerName,
-      // Новый чат не активирует AI сам по себе — только явная команда
-      // (см. processIncomingMessage) переводит его в bot_processing.
-      status: 'operator_needed',
+      // Новый чат сразу в режиме бота: ассистент по умолчанию встречает
+      // клиента с первого сообщения, оператор только наблюдает (и получает
+      // пуш — колокольчик у новых чатов тоже включён по умолчанию).
+      status: 'bot_processing',
       avatar_color: pickAvatarColor(String(matchValue)),
       ai_metadata: { collected_data: {} },
       ...extraFields,
@@ -147,6 +191,22 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
   // Модель могла скопировать бейдж-подпись из старой истории — вырезаем,
   // чтобы `[Бейдж]` не задваивался с тем, что добавит withBadge при отправке.
   aiResponse = stripBadgePrefix(aiResponse, badge);
+
+  // <NOTIFY>текст</NOTIFY> — пуш оператору из любого ответа, в том числе
+  // посреди диалога без <RESULT>; из видимого текста вырезается.
+  const notifyTags = extractNotifyTags(aiResponse);
+  aiResponse = notifyTags.text;
+  if (notifyTags.notifications.length) {
+    pushToOperator(chatData.customer_name || 'Оператор', notifyTags.notifications.join(' · '), chatData.id);
+  }
+
+  // <BELL>вкл|выкл</BELL> — колокольчик чата, тоже из любого ответа.
+  const bellTag = extractBellTag(aiResponse);
+  aiResponse = bellTag.text;
+  if (bellTag.value !== undefined) {
+    await supabaseAdmin.from('chats').update({ notify_on_message: bellTag.value }).eq('id', chatData.id);
+  }
+
   const resultMatch = aiResponse.match(RESULT_TAG);
 
   if (!resultMatch) {
@@ -177,12 +237,41 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
   let updatedOrder: any = null;
   let updatedOrderNewStatusId: string | null = null;
 
-  // Служебные ключи уведомлений (см. Документацию): notify_operator — пуш
-  // оператору прямо сейчас (команда завершилась, нужен человек); bell —
-  // включить колокольчик на чате (оператор понадобится, когда клиент напишет).
+  // Служебный ключ notify_operator (см. Документацию) — пуш оператору при
+  // завершении команды. Колокольчик управляется только тегом <BELL>.
   const isJsonObject = finalJson && typeof finalJson === 'object';
   const notifyOperator = isJsonObject ? finalJson.notify_operator : undefined;
-  const bellOn = isJsonObject && (finalJson.bell === true || finalJson.bell === 'true');
+
+  const sendNotifyPush = () => {
+    if (!notifyOperator) return;
+    pushToOperator(
+      chatData.customer_name || 'Нужен оператор',
+      typeof notifyOperator === 'string' && notifyOperator.trim() ? notifyOperator : 'Нужен оператор',
+      chatData.id
+    );
+  };
+
+  // Тег только из notify_operator — побочное действие, а не завершение:
+  // шлём пуш, отправляем видимый текст (если есть) и продолжаем диалог,
+  // не передавая чат оператору. Пустой объект {} побочным НЕ считается —
+  // это обычное завершение без заказа (иначе команда застряла бы активной).
+  if (isJsonObject && 'notify_operator' in finalJson) {
+    const dataKeys = Object.keys(finalJson).filter(k => k !== 'notify_operator');
+    if (dataKeys.length === 0) {
+      sendNotifyPush();
+      if (cleanMessage) {
+        await sender.send(withBadge(cleanMessage, badge));
+        await supabaseAdmin.from('messages').insert([{
+          chat_id: chatData.id,
+          content: cleanMessage,
+          is_from_bot: true,
+          is_ai_generated: true,
+          badge
+        }]);
+      }
+      return;
+    }
+  }
 
   if (isJsonObject) {
     const orderNumber = finalJson.order_number;
@@ -202,7 +291,6 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
         delete extraData.order_number;
         delete extraData.status;
         delete extraData.notify_operator;
-        delete extraData.bell;
 
         const updates: Record<string, any> = {
           data: { ...existingOrder.data, ...extraData },
@@ -260,10 +348,9 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
       delete orderData.order_number;
       delete orderData.status;
       delete orderData.notify_operator;
-      delete orderData.bell;
 
-      // Если после вычета служебных ключей данных не осталось (например,
-      // RESULT содержал только notify_operator/bell) — пустой заказ не создаём.
+      // Если после вычета служебных ключей данных не осталось — пустой заказ
+      // не создаём.
       if (Object.keys(orderData).length > 0) {
         const { data: orderRow } = await supabaseAdmin.from('orders').insert([{
           chat_id: chatData.id,
@@ -281,14 +368,15 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
     active_command_id: null,
     ai_metadata: { collected_data: finalJson || {} }
   };
-  if (bellOn) chatUpdates.notify_on_message = true;
   await supabaseAdmin.from('chats').update(chatUpdates).eq('id', chatData.id);
 
+  // Суффикс — только когда с заказом реально что-то произошло; завершение
+  // без заказа (утилитарные команды вроде /start) уходит чистым текстом.
   const suffix = updatedOrder
     ? `\n\n✅ Заказ №${updatedOrder.order_number} обновлён.`
     : createdOrder
       ? "\n\n✅ Данные собраны. Сейчас подключится оператор."
-      : "\n\n✅ Готово. Сейчас подключится оператор.";
+      : "";
   const bodyText = cleanMessage || "Готово.";
   await sender.send(withBadge(bodyText + suffix, badge));
 
@@ -301,16 +389,7 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
   }]);
 
   // Пуш оператору по служебному ключу notify_operator — не блокируем ход
-  if (notifyOperator) {
-    const { sendPushToAll } = await import('@/lib/webPush');
-    sendPushToAll({
-      title: chatData.customer_name || 'Нужен оператор',
-      body: typeof notifyOperator === 'string' && notifyOperator.trim()
-        ? notifyOperator.slice(0, 140)
-        : 'Команда завершена — нужен оператор',
-      chatId: chatData.id,
-    }).catch((err) => console.error('notify_operator push failed:', err));
-  }
+  sendNotifyPush();
 
   if (createdOrder) {
     const { runForwardRules } = await import('@/lib/orderForwarding');

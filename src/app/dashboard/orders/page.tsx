@@ -82,8 +82,13 @@ export default function OrdersPage() {
   };
 
   const togglePaid = async (orderId: string, isPaid: boolean) => {
-    // Оплата независима от статуса заказа — просто своё поле, без правил пересылки.
-    await supabase.from('orders').update({ is_paid: isPaid }).eq('id', orderId);
+    // Через серверный роут — на смену отметки оплаты срабатывают триггеры
+    // (события "оплачен"/"оплата снята" в разделе Триггеры).
+    await fetch(`/api/orders/${orderId}/paid`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isPaid }),
+    });
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, is_paid: isPaid } : o));
   };
 
