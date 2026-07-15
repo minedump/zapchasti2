@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { MessageCircle, Calendar, ChevronDown, Plus, Search, X } from 'lucide-react';
+import { MessageCircle, Calendar, ChevronDown, Plus, Search, X, Lock } from 'lucide-react';
 import { Badge, Button, Input, Skeleton, Toggle } from '@/components/ui';
 import { Footer } from '@/components/Footer';
 import { cn } from '@/lib/utils';
@@ -319,12 +319,23 @@ export default function OrdersPage() {
               <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <div className="text-[10px] font-bold text-slate-400 uppercase mb-2">Данные заказа</div>
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries(order.data || {}).map(([key, value]: [string, any]) => (
-                    <div key={key} className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs">
-                      <span className="text-slate-400 mr-1">{key}:</span>
-                      <span className="font-medium text-slate-700">{String(value)}</span>
-                    </div>
-                  ))}
+                  {Object.entries(order.data || {}).map(([key, value]: [string, any]) => {
+                    const isPrivate = key.startsWith('_');
+                    return (
+                      <div
+                        key={key}
+                        title={isPrivate ? 'Скрытое поле — AI его не видит' : undefined}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg border text-xs flex items-center gap-1",
+                          isPrivate ? "bg-slate-100 border-slate-200" : "bg-white border-slate-200"
+                        )}
+                      >
+                        {isPrivate && <Lock size={10} className="text-slate-400 shrink-0" />}
+                        <span className="text-slate-400 mr-1">{isPrivate ? key.slice(1) : key}:</span>
+                        <span className="font-medium text-slate-700">{String(value)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

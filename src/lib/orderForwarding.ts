@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { runPromptOnData, stripResultTags, parseResultJson } from '@/lib/chatAgent';
+import { runPromptOnData, stripResultTags, parseResultJson, omitPrivateFields } from '@/lib/chatAgent';
 import { getSenderForChat } from '@/lib/channelSenders';
 import { withBadge, stripBadgePrefix } from '@/lib/badge';
 
@@ -30,8 +30,10 @@ function evaluateCondition(data: any, condition: ForwardCondition): boolean {
   }
 }
 
+// Скрытые поля (ключи с "_") не покидают CRM ни в AI-контекстах, ни при
+// пересылке "как есть".
 function formatOrderData(data: any): string {
-  return Object.entries(data ?? {}).map(([key, value]) => `${key}: ${value}`).join('\n');
+  return Object.entries(omitPrivateFields(data)).map(([key, value]) => `${key}: ${value}`).join('\n');
 }
 
 /**
@@ -67,7 +69,7 @@ async function runProcessingRule(rule: any, order: ForwardableOrder, statusId: s
 
   const raw = await runPromptOnData(
     prompt.prompt_template,
-    { ...order.data, order_number: order.order_number, 'ДИАЛОГ ЧАТА': dialog },
+    { ...omitPrivateFields(order.data), order_number: order.order_number, 'ДИАЛОГ ЧАТА': dialog },
     { chatId: order.chat_id ?? null, commandId: rule.prompt_id, source: 'forward' }
   );
 
@@ -170,7 +172,7 @@ export async function runForwardRules(order: ForwardableOrder, statusId: string)
         if (prompt?.prompt_template) {
           const raw = await runPromptOnData(
             prompt.prompt_template,
-            { ...order.data, order_number: order.order_number },
+            { ...omitPrivateFields(order.data), order_number: order.order_number },
             { chatId: targetChat.id, commandId: rule.prompt_id, source: 'forward' }
           );
           // Первое сообщение — всегда одноразовая трансформация текста, тег

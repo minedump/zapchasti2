@@ -46,13 +46,20 @@ export function parseResultJson(text: string): Record<string, any> | null {
   }
 }
 
+/** Скрытые поля заказа: ключи, начинающиеся с "_", не попадают ни в какие
+ * AI-контексты и не уходят при пересылках (например, _Закупка — цена
+ * поставщика, которую клиентскому AI видеть нельзя). */
+export function omitPrivateFields(data: Record<string, any> | null | undefined): Record<string, any> {
+  return Object.fromEntries(Object.entries(data ?? {}).filter(([key]) => !key.startsWith('_')));
+}
+
 /** Renders a chat's orders as text for injection into an AI prompt (used by
  * the command flag "получает заказы чата" and by message templates). */
 export function formatOrdersForPrompt(orders: Array<{ order_number: number; data: any; order_statuses?: { name: string } | null }>): string {
   if (!orders.length) return 'Заказов пока нет.';
   return orders
     .map((o) => {
-      const fields = Object.entries(o.data ?? {}).map(([k, v]) => `  ${k}: ${v}`).join('\n');
+      const fields = Object.entries(omitPrivateFields(o.data)).map(([k, v]) => `  ${k}: ${v}`).join('\n');
       return `Заказ №${o.order_number} (${o.order_statuses?.name ?? 'без статуса'}):\n${fields}`;
     })
     .join('\n\n');
@@ -170,7 +177,14 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
   let updatedOrder: any = null;
   let updatedOrderNewStatusId: string | null = null;
 
-  if (finalJson && typeof finalJson === 'object') {
+  // Служебные ключи уведомлений (см. Документацию): notify_operator — пуш
+  // оператору прямо сейчас (команда завершилась, нужен человек); bell —
+  // включить колокольчик на чате (оператор понадобится, когда клиент напишет).
+  const isJsonObject = finalJson && typeof finalJson === 'object';
+  const notifyOperator = isJsonObject ? finalJson.notify_operator : undefined;
+  const bellOn = isJsonObject && (finalJson.bell === true || finalJson.bell === 'true');
+
+  if (isJsonObject) {
     const orderNumber = finalJson.order_number;
 
     if (orderNumber !== undefined && orderNumber !== null) {
@@ -187,6 +201,8 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
         const extraData: Record<string, any> = { ...finalJson };
         delete extraData.order_number;
         delete extraData.status;
+        delete extraData.notify_operator;
+        delete extraData.bell;
 
         const updates: Record<string, any> = {
           data: { ...existingOrder.data, ...extraData },
@@ -243,22 +259,30 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
       const orderData: Record<string, any> = { ...finalJson };
       delete orderData.order_number;
       delete orderData.status;
+      delete orderData.notify_operator;
+      delete orderData.bell;
 
-      const { data: orderRow } = await supabaseAdmin.from('orders').insert([{
-        chat_id: chatData.id,
-        data: orderData,
-        status_id: statusId,
-        command_id: commandId
-      }]).select().maybeSingle();
-      createdOrder = orderRow;
+      // Если после вычета служебных ключей данных не осталось (например,
+      // RESULT содержал только notify_operator/bell) — пустой заказ не создаём.
+      if (Object.keys(orderData).length > 0) {
+        const { data: orderRow } = await supabaseAdmin.from('orders').insert([{
+          chat_id: chatData.id,
+          data: orderData,
+          status_id: statusId,
+          command_id: commandId
+        }]).select().maybeSingle();
+        createdOrder = orderRow;
+      }
     }
   }
 
-  await supabaseAdmin.from('chats').update({
+  const chatUpdates: Record<string, any> = {
     status: 'operator_needed',
     active_command_id: null,
     ai_metadata: { collected_data: finalJson || {} }
-  }).eq('id', chatData.id);
+  };
+  if (bellOn) chatUpdates.notify_on_message = true;
+  await supabaseAdmin.from('chats').update(chatUpdates).eq('id', chatData.id);
 
   const suffix = updatedOrder
     ? `\n\n✅ Заказ №${updatedOrder.order_number} обновлён.`
@@ -275,6 +299,18 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
     is_ai_generated: true,
     badge
   }]);
+
+  // Пуш оператору по служебному ключу notify_operator — не блокируем ход
+  if (notifyOperator) {
+    const { sendPushToAll } = await import('@/lib/webPush');
+    sendPushToAll({
+      title: chatData.customer_name || 'Нужен оператор',
+      body: typeof notifyOperator === 'string' && notifyOperator.trim()
+        ? notifyOperator.slice(0, 140)
+        : 'Команда завершена — нужен оператор',
+      chatId: chatData.id,
+    }).catch((err) => console.error('notify_operator push failed:', err));
+  }
 
   if (createdOrder) {
     const { runForwardRules } = await import('@/lib/orderForwarding');
