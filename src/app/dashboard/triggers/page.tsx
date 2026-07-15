@@ -22,18 +22,25 @@ interface Condition {
   value: string;
 }
 
+const TARGET_LABELS: Record<string, string> = {
+  chat: 'в указанный чат',
+  order_chat: 'в чат заказа (клиенту)',
+  none: 'без пересылки — обработать промптом',
+};
+
 interface Rule {
   id: string;
   name: string;
   is_active: boolean;
   trigger_status_id: string;
-  target_chat_id: string;
+  target_type: 'chat' | 'order_chat' | 'none';
+  target_chat_id: string | null;
   prompt_id: string | null;
   conditions: Condition[];
 }
 
 const EMPTY_CONDITION: Condition = { field_path: '', operator: 'contains', value: '' };
-const EMPTY_RULE = { name: '', is_active: true, trigger_status_id: '', target_chat_id: '', prompt_id: null, conditions: [{ ...EMPTY_CONDITION }] };
+const EMPTY_RULE = { name: '', is_active: true, trigger_status_id: '', target_type: 'chat' as const, target_chat_id: '', prompt_id: null, conditions: [{ ...EMPTY_CONDITION }] };
 
 export default function TriggersPage() {
   const [rules, setRules] = useState<Rule[]>([]);
@@ -78,7 +85,11 @@ export default function TriggersPage() {
 
   const handleEdit = (rule: Rule) => {
     setEditingId(rule.id);
-    setEditForm({ ...rule, conditions: rule.conditions.length ? [...rule.conditions] : [{ ...EMPTY_CONDITION }] });
+    setEditForm({
+      ...rule,
+      target_type: rule.target_type ?? 'chat',
+      conditions: rule.conditions.length ? [...rule.conditions] : [{ ...EMPTY_CONDITION }],
+    });
   };
 
   const handleCancel = (rule: any) => {
@@ -103,11 +114,13 @@ export default function TriggersPage() {
   const handleSave = async () => {
     if (!editForm.name.trim()) return toast.error('Укажите название правила');
     if (!editForm.trigger_status_id) return toast.error('Выберите статус-триггер');
-    if (!editForm.target_chat_id) return toast.error('Выберите чат для пересылки');
+    if (editForm.target_type === 'chat' && !editForm.target_chat_id) return toast.error('Выберите чат для пересылки');
+    if (editForm.target_type === 'none' && !editForm.prompt_id) return toast.error('Для правила без пересылки нужен промпт');
 
     setSaving(true);
     const { isNew, conditions, ...payload } = editForm;
     payload.prompt_id = payload.prompt_id || null;
+    payload.target_chat_id = editForm.target_type === 'chat' ? editForm.target_chat_id : null;
 
     let ruleId = editForm.id;
     if (isNew) {
@@ -243,16 +256,34 @@ export default function TriggersPage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
                       <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1.5 block">Переслать в чат</label>
-                        <Select value={editForm.target_chat_id} onChange={e => setEditForm({ ...editForm, target_chat_id: e.target.value })}>
-                          <option value="">Выберите чат…</option>
-                          {chats.map(c => <option key={c.id} value={c.id}>{c.customer_name || 'Без имени'} ({c.channel})</option>)}
+                        <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1.5 block">Цель</label>
+                        <Select value={editForm.target_type} onChange={e => setEditForm({ ...editForm, target_type: e.target.value })}>
+                          <option value="chat">Переслать в указанный чат</option>
+                          <option value="order_chat">Переслать в чат заказа (клиенту)</option>
+                          <option value="none">Без пересылки — только обработать промптом</option>
                         </Select>
+                        {editForm.target_type === 'order_chat' && (
+                          <p className="text-xs text-slate-400 ml-1 mt-1.5">Сообщение уйдёт в тот чат, где создан заказ. С «Режимом диалога после пересылки» у промпта — начнёт AI-диалог с клиентом по этому заказу.</p>
+                        )}
+                        {editForm.target_type === 'none' && (
+                          <p className="text-xs text-slate-400 ml-1 mt-1.5">Промпт получит данные заказа и диалог его чата, а тегом {'<RESULT>'} допишет поля в заказ (например, причину отмены) — никому ничего не отправляя.</p>
+                        )}
                       </div>
+                      {editForm.target_type === 'chat' && (
+                        <div>
+                          <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1.5 block">Переслать в чат</label>
+                          <Select value={editForm.target_chat_id ?? ''} onChange={e => setEditForm({ ...editForm, target_chat_id: e.target.value })}>
+                            <option value="">Выберите чат…</option>
+                            {chats.map(c => <option key={c.id} value={c.id}>{c.customer_name || 'Без имени'} ({c.channel})</option>)}
+                          </Select>
+                        </div>
+                      )}
                       <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1.5 block">Обработать промптом (необязательно)</label>
+                        <label className="text-xs font-bold text-slate-500 uppercase ml-1 mb-1.5 block">
+                          {editForm.target_type === 'none' ? 'Промпт обработки' : 'Обработать промптом (необязательно)'}
+                        </label>
                         <Select value={editForm.prompt_id ?? ''} onChange={e => setEditForm({ ...editForm, prompt_id: e.target.value || null })}>
-                          <option value="">Без обработки — переслать как есть</option>
+                          <option value="">{editForm.target_type === 'none' ? 'Выберите промпт…' : 'Без обработки — переслать как есть'}</option>
                           {prompts.map(p => <option key={p.id} value={p.id}>{p.description || p.command || p.id}</option>)}
                         </Select>
                       </div>
@@ -288,7 +319,9 @@ export default function TriggersPage() {
                       {' · '}
                       Условия: {rule.conditions.length ? rule.conditions.map((c: Condition) => `${c.field_path} ${OPERATOR_LABELS[c.operator]}${c.value ? ` "${c.value}"` : ''}`).join(', ') : 'нет'}
                       {' → '}
-                      {chats.find(c => c.id === rule.target_chat_id)?.customer_name ?? '—'}
+                      {rule.target_type === 'chat'
+                        ? (chats.find(c => c.id === rule.target_chat_id)?.customer_name ?? '—')
+                        : (TARGET_LABELS[rule.target_type] ?? '—')}
                     </div>
                   </div>
                 )}

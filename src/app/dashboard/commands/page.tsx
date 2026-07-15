@@ -66,6 +66,7 @@ export default function CommandsPage() {
       thinking_message: DEFAULT_THINKING_MESSAGE,
       knowledge_mode: 'none',
       knowledge_ids: [] as string[],
+      history_scope: 'all',
       isNew: true,
     };
     setCommands([newCmd, ...commands]);
@@ -86,6 +87,7 @@ export default function CommandsPage() {
       thinking_message: cmd.thinking_message ?? '',
       knowledge_mode: cmd.knowledge_mode ?? 'none',
       knowledge_ids: (cmd.command_knowledge ?? []).map((l: any) => l.knowledge_id),
+      history_scope: cmd.history_scope ?? 'all',
     });
   };
 
@@ -288,6 +290,15 @@ export default function CommandsPage() {
                       placeholder={DEFAULT_THINKING_MESSAGE}
                     />
                     <p className="text-xs text-slate-400 ml-1">Отправляется клиенту сразу, до обращения к AI. Оставьте пустым, чтобы не отправлять.</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-500 uppercase ml-1">Контекст диалога</label>
+                    <Select value={editForm.history_scope} onChange={e => setEditForm({ ...editForm, history_scope: e.target.value })}>
+                      <option value="all">Вся переписка чата</option>
+                      <option value="command">Только с запуска команды</option>
+                    </Select>
+                    <p className="text-xs text-slate-400 ml-1">Сколько истории сообщений видит AI: весь чат целиком или только реплики после запуска этой команды.</p>
                   </div>
 
                   <div className="space-y-1.5">

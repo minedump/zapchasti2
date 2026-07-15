@@ -33,6 +33,19 @@ export function stripResultTags(text: string): string {
   return text.replace(/<RESULT>[\s\S]*?<\/RESULT>/gi, '').trim();
 }
 
+/** Parses the JSON payload of the first <RESULT> tag, or null when the tag is
+ * missing/empty/invalid. Used by no-forward trigger rules (orderForwarding). */
+export function parseResultJson(text: string): Record<string, any> | null {
+  const match = text.match(RESULT_TAG);
+  if (!match) return null;
+  try {
+    const json = JSON.parse(match[1].trim());
+    return json && typeof json === 'object' ? json : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Renders a chat's orders as text for injection into an AI prompt (used by
  * the command flag "получает заказы чата" and by message templates). */
 export function formatOrdersForPrompt(orders: Array<{ order_number: number; data: any; order_statuses?: { name: string } | null }>): string {
@@ -471,7 +484,9 @@ export async function processIncomingMessage(chatData: any, text: string, sender
       await supabaseAdmin.from('chats').update({
         status: 'bot_processing',
         active_command_id: commandData.id,
-        ai_metadata: { collected_data: {} }
+        // command_started_at — для history_scope='command': история для модели
+        // обрезается сообщениями с момента запуска этой команды
+        ai_metadata: { collected_data: {}, command_started_at: new Date().toISOString() }
       }).eq('id', chatData.id);
 
       if (commandData.thinking_message) {
@@ -526,11 +541,17 @@ export async function processIncomingMessage(chatData: any, text: string, sender
       currentPrompt = 'Ты помощник.';
     }
 
-    const { data: history } = await supabaseAdmin
+    // Глубина контекста: history_scope='command' обрезает историю сообщениями
+    // с момента запуска текущей команды (по умолчанию — вся переписка чата).
+    let historyQuery = supabaseAdmin
       .from('messages')
       .select('*')
       .eq('chat_id', chatData.id)
       .order('created_at', { ascending: true });
+    if (commandForTurn?.history_scope === 'command' && metadata.command_started_at) {
+      historyQuery = historyQuery.gte('created_at', metadata.command_started_at);
+    }
+    const { data: history } = await historyQuery;
 
     const aiResponse = await askDeepSeek(
       history || [],
