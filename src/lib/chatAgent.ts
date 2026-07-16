@@ -80,8 +80,7 @@ export function extractBotTag(text: string): { text: string; value?: boolean } {
   return extractSwitchTag(text, BOT_TAG);
 }
 
-/** Fire-and-forget push to the operator's devices (used by <NOTIFY> tags and
- * the notify_operator RESULT key). */
+/** Fire-and-forget push to the operator's devices (used by <NOTIFY> tags). */
 export function pushToOperator(title: string, body: string, chatId?: string | null): void {
   import('@/lib/webPush').then(({ sendPushToAll }) =>
     sendPushToAll({ title, body: body.slice(0, 140), chatId: chatId ?? undefined })
@@ -189,6 +188,20 @@ async function sendSystemMessage(chatData: { id: string; channel: string }, send
   await sendServiceMessage(chatData.id, sender, text, badge);
 }
 
+// «Надо подумать» уходит клиенту только если модель реально думает дольше
+// THINKING_DELAY_MS — быстрые ответы отправляются без прелюдии. Возвращает
+// функцию отмены: вызывается сразу после ответа модели.
+const THINKING_DELAY_MS = 5000;
+
+function scheduleThinkingMessage(chatData: any, sender: ChatSender, command: { thinking_message?: string | null; badge?: string | null } | null): () => void {
+  if (!command?.thinking_message) return () => {};
+  const timer = setTimeout(() => {
+    sendServiceMessage(chatData.id, sender, command.thinking_message!, command.badge ?? null)
+      .catch((err) => console.error('thinking message failed:', err));
+  }, THINKING_DELAY_MS);
+  return () => clearTimeout(timer);
+}
+
 // Разбирает ответ AI на предмет тега <RESULT>...</RESULT>, которым завершается команда.
 // Поддерживает два варианта:
 //  - <RESULT>{ ...json... }</RESULT> — создаёт заказ с этими данными и передаёт чат оператору;
@@ -263,42 +276,9 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
   let updatedOrder: any = null;
   let updatedOrderNewStatusId: string | null = null;
 
-  // Служебный ключ notify_operator (см. Документацию) — пуш оператору при
-  // завершении команды. Колокольчик управляется только тегом <BELL>.
+  // Уведомления оператору — только спецтегом <NOTIFY> (обработан выше);
+  // служебные ключи в JSON заказа — order_number и status.
   const isJsonObject = finalJson && typeof finalJson === 'object';
-  const notifyOperator = isJsonObject ? finalJson.notify_operator : undefined;
-
-  const sendNotifyPush = () => {
-    if (!notifyOperator) return;
-    pushToOperator(
-      chatData.customer_name || 'Нужен оператор',
-      typeof notifyOperator === 'string' && notifyOperator.trim() ? notifyOperator : 'Нужен оператор',
-      chatData.id
-    );
-  };
-
-  // Тег только из notify_operator — побочное действие, а не завершение:
-  // шлём пуш, отправляем видимый текст (если есть) и продолжаем диалог,
-  // не передавая чат оператору. Пустой объект {} побочным НЕ считается —
-  // это обычное завершение без заказа (иначе команда застряла бы активной).
-  if (isJsonObject && 'notify_operator' in finalJson) {
-    const dataKeys = Object.keys(finalJson).filter(k => k !== 'notify_operator');
-    if (dataKeys.length === 0) {
-      sendNotifyPush();
-      if (cleanMessage) {
-        await sender.send(withBadge(cleanMessage, badge));
-        await supabaseAdmin.from('messages').insert([{
-          chat_id: chatData.id,
-          content: cleanMessage,
-          is_from_bot: true,
-          is_ai_generated: true,
-          badge
-        }]);
-      }
-      await applyBotTag();
-      return;
-    }
-  }
 
   if (isJsonObject) {
     const orderNumber = finalJson.order_number;
@@ -317,7 +297,6 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
         const extraData: Record<string, any> = { ...finalJson };
         delete extraData.order_number;
         delete extraData.status;
-        delete extraData.notify_operator;
 
         const updates: Record<string, any> = {
           data: { ...existingOrder.data, ...extraData },
@@ -374,7 +353,6 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
       const orderData: Record<string, any> = { ...finalJson };
       delete orderData.order_number;
       delete orderData.status;
-      delete orderData.notify_operator;
 
       // Если после вычета служебных ключей данных не осталось — пустой заказ
       // не создаём.
@@ -415,9 +393,6 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
     is_ai_generated: true,
     badge
   }]);
-
-  // Пуш оператору по служебному ключу notify_operator — не блокируем ход
-  sendNotifyPush();
 
   if (createdOrder) {
     const { runForwardRules } = await import('@/lib/orderForwarding');
@@ -632,16 +607,18 @@ export async function processIncomingMessage(chatData: any, text: string, sender
         ai_metadata: { collected_data: {}, command_started_at: new Date().toISOString() }
       }).eq('id', chatData.id);
 
-      if (commandData.thinking_message) {
-        await sendServiceMessage(chatData.id, sender, commandData.thinking_message, commandData.badge ?? null);
-      }
-
       const startPrompt = await buildCommandPrompt(commandData, chatData.id);
-      const aiResponse = await askDeepSeek([], startPrompt, {}, {
-        chatId: chatData.id,
-        commandId: commandData.id,
-        source: 'command',
-      });
+      const cancelThinking = scheduleThinkingMessage(chatData, sender, commandData);
+      let aiResponse: string;
+      try {
+        aiResponse = await askDeepSeek([], startPrompt, {}, {
+          chatId: chatData.id,
+          commandId: commandData.id,
+          source: 'command',
+        });
+      } finally {
+        cancelThinking();
+      }
 
       await finishCommandTurn(chatData, sender, aiResponse, commandData.badge ?? null, commandData.id);
       return;
@@ -673,9 +650,6 @@ export async function processIncomingMessage(chatData: any, text: string, sender
     let commandId: string | null = null;
 
     if (commandForTurn) {
-      if (commandForTurn.thinking_message) {
-        await sendServiceMessage(chatData.id, sender, commandForTurn.thinking_message, commandForTurn.badge ?? null);
-      }
       currentPrompt = await buildCommandPrompt(commandForTurn, chatData.id);
       badge = commandForTurn.badge ?? null;
       commandId = commandForTurn.id;
@@ -696,12 +670,18 @@ export async function processIncomingMessage(chatData: any, text: string, sender
     }
     const { data: history } = await historyQuery;
 
-    const aiResponse = await askDeepSeek(
-      history || [],
-      currentPrompt,
-      metadata.collected_data || {},
-      { chatId: chatData.id, commandId, source: isDefaultTurn ? 'default' : 'command' }
-    );
+    const cancelThinking = scheduleThinkingMessage(chatData, sender, commandForTurn);
+    let aiResponse: string;
+    try {
+      aiResponse = await askDeepSeek(
+        history || [],
+        currentPrompt,
+        metadata.collected_data || {},
+        { chatId: chatData.id, commandId, source: isDefaultTurn ? 'default' : 'command' }
+      );
+    } finally {
+      cancelThinking();
+    }
 
     await finishCommandTurn(chatData, sender, aiResponse, badge, commandId);
   }

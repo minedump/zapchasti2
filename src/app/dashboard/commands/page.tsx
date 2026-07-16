@@ -289,7 +289,7 @@ export default function CommandsPage() {
                       onChange={e => setEditForm({ ...editForm, thinking_message: e.target.value })}
                       placeholder={DEFAULT_THINKING_MESSAGE}
                     />
-                    <p className="text-xs text-slate-400 ml-1">Отправляется клиенту сразу, до обращения к AI. Оставьте пустым, чтобы не отправлять.</p>
+                    <p className="text-xs text-slate-400 ml-1">Отправляется клиенту, только если ответ AI занимает дольше 5 секунд — быстрые ответы уходят без прелюдии. Оставьте пустым, чтобы не отправлять.</p>
                   </div>
 
                   <div className="space-y-1.5">
