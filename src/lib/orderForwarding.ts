@@ -1,5 +1,19 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import { runPromptOnData, stripResultTags, parseResultJson, omitPrivateFields, extractNotifyTags, extractBellTag, pushToOperator } from '@/lib/chatAgent';
+import { runPromptOnData, stripResultTags, parseResultJson, omitPrivateFields, extractNotifyTags, extractBellTag, extractBotTag, pushToOperator } from '@/lib/chatAgent';
+
+// Применяет теги <BELL>/<BOT> из ответа триггерного промпта к чату.
+async function applySwitchTags(chatId: string | null | undefined, bell?: boolean, bot?: boolean): Promise<void> {
+  if (!chatId) return;
+  const updates: Record<string, any> = {};
+  if (bell !== undefined) updates.notify_on_message = bell;
+  if (bot !== undefined) {
+    updates.status = bot ? 'bot_processing' : 'operator_needed';
+    if (!bot) updates.active_command_id = null;
+  }
+  if (Object.keys(updates).length) {
+    await supabaseAdmin.from('chats').update(updates).eq('id', chatId);
+  }
+}
 import { getSenderForChat } from '@/lib/channelSenders';
 import { withBadge, stripBadgePrefix } from '@/lib/badge';
 
@@ -78,13 +92,12 @@ async function runProcessingRule(rule: any, order: ForwardableOrder, statusId: s
     pushToOperator(`Заказ №${order.order_number ?? ''}`.trim(), notifyTags.notifications.join(' · '), order.chat_id);
   }
 
-  // <BELL> в обработке без пересылки управляет колокольчиком чата заказа
+  // <BELL>/<BOT> в обработке без пересылки управляют чатом заказа
   const bellTag = extractBellTag(notifyTags.text);
-  if (bellTag.value !== undefined && order.chat_id) {
-    await supabaseAdmin.from('chats').update({ notify_on_message: bellTag.value }).eq('id', order.chat_id);
-  }
+  const botTag = extractBotTag(bellTag.text);
+  await applySwitchTags(order.chat_id, bellTag.value, botTag.value);
 
-  const json = parseResultJson(bellTag.text);
+  const json = parseResultJson(botTag.text);
   if (!json) return; // промпт ничего не вернул — заказ не трогаем
 
   const extraData: Record<string, any> = { ...json };
@@ -216,10 +229,9 @@ async function runMatchingRules(rules: any[], order: ForwardableOrder, currentSt
             pushToOperator(targetChat.customer_name || `Заказ №${order.order_number ?? ''}`.trim(), notifyTags.notifications.join(' · '), targetChat.id);
           }
           const bellTag = extractBellTag(notifyTags.text);
-          if (bellTag.value !== undefined) {
-            await supabaseAdmin.from('chats').update({ notify_on_message: bellTag.value }).eq('id', targetChat.id);
-          }
-          content = stripResultTags(bellTag.text) || formatOrderData(order.data);
+          const botTag = extractBotTag(bellTag.text);
+          await applySwitchTags(targetChat.id, bellTag.value, botTag.value);
+          content = stripResultTags(botTag.text) || formatOrderData(order.data);
           badge = prompt.badge ?? null;
           isAiGenerated = true;
           // Продолжать диалогом (ждать ответ и завершиться через <RESULT>)

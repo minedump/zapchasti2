@@ -50,22 +50,34 @@ export function extractNotifyTags(text: string): { text: string; notifications: 
   return { text: cleaned, notifications };
 }
 
-// <BELL>вкл</BELL> / <BELL>выкл</BELL> — колокольчик чата из любого ответа
-// модели (пуш оператору о следующем сообщении клиента). Тег вырезается из
-// видимого текста; понимает вкл/выкл/on/off/true/false.
+// <BELL>вкл|выкл</BELL> — колокольчик чата (пуш о следующем сообщении клиента);
+// <BOT>вкл|выкл</BOT> — режим бота в чате: вкл возвращает чат ассистенту
+// (например, при закрытии сделки), выкл передаёт оператору.
+// Теги работают в любом ответе модели, вырезаются из видимого текста и
+// понимают вкл/выкл/on/off/true/false.
 const BELL_TAG = /<BELL>([\s\S]*?)<\/BELL>/gi;
+const BOT_TAG = /<BOT>([\s\S]*?)<\/BOT>/gi;
 
-/** Extracts <BELL> tags: returns the reply without them plus the last
- * requested bell state (undefined when no valid tag present). */
-export function extractBellTag(text: string): { text: string; value?: boolean } {
+function extractSwitchTag(text: string, tag: RegExp): { text: string; value?: boolean } {
   let value: boolean | undefined;
-  const cleaned = text.replace(BELL_TAG, (_, body) => {
+  const cleaned = text.replace(tag, (_, body) => {
     const v = String(body).trim().toLowerCase();
     if (['вкл', 'on', 'true', '1', 'да'].includes(v)) value = true;
     else if (['выкл', 'off', 'false', '0', 'нет'].includes(v)) value = false;
     return '';
   }).trim();
   return { text: cleaned, value };
+}
+
+/** Extracts <BELL> tags: returns the reply without them plus the last
+ * requested bell state (undefined when no valid tag present). */
+export function extractBellTag(text: string): { text: string; value?: boolean } {
+  return extractSwitchTag(text, BELL_TAG);
+}
+
+/** Extracts <BOT> tags — same contract as extractBellTag. */
+export function extractBotTag(text: string): { text: string; value?: boolean } {
+  return extractSwitchTag(text, BOT_TAG);
 }
 
 /** Fire-and-forget push to the operator's devices (used by <NOTIFY> tags and
@@ -207,6 +219,19 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
     await supabaseAdmin.from('chats').update({ notify_on_message: bellTag.value }).eq('id', chatData.id);
   }
 
+  // <BOT>вкл|выкл</BOT> — режим бота: вкл возвращает чат ассистенту,
+  // выкл передаёт оператору (и снимает активную команду).
+  const botTag = extractBotTag(aiResponse);
+  aiResponse = botTag.text;
+  const applyBotTag = async () => {
+    if (botTag.value === undefined) return;
+    await supabaseAdmin.from('chats').update(
+      botTag.value
+        ? { status: 'bot_processing' }
+        : { status: 'operator_needed', active_command_id: null }
+    ).eq('id', chatData.id);
+  };
+
   const resultMatch = aiResponse.match(RESULT_TAG);
 
   if (!resultMatch) {
@@ -218,6 +243,7 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
       is_ai_generated: true,
       badge
     }]);
+    await applyBotTag();
     return;
   }
 
@@ -269,6 +295,7 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
           badge
         }]);
       }
+      await applyBotTag();
       return;
     }
   }
@@ -364,7 +391,8 @@ async function finishCommandTurn(chatData: any, sender: ChatSender, aiResponse: 
   }
 
   const chatUpdates: Record<string, any> = {
-    status: 'operator_needed',
+    // <BOT>вкл</BOT> при завершении оставляет чат ассистенту вместо оператора
+    status: botTag.value === true ? 'bot_processing' : 'operator_needed',
     active_command_id: null,
     ai_metadata: { collected_data: finalJson || {} }
   };
